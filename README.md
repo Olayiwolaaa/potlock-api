@@ -51,4 +51,4 @@ The platform operates on a **Fee-on-Settlement** logic:
 
 1. **Clone the repository**
    ```bash
-   git clone [https://github.com/yourusername/potlockng.git](https://github.com/yourusername/potlockng.git)
+   git clone [https://github.com/Olayiwolaaa/potlockng.git](https://github.com/Olayiwolaaa/potlockng.git)
