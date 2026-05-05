@@ -1,0 +1,6 @@
+[test]
+# Where to find tests
+include = ["test/**/*.test.ts"]
+
+# Path aliases matching tsconfig.json
+preload = ["./test/setup.ts"]

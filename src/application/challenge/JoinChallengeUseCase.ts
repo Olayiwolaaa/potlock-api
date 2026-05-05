@@ -6,6 +6,11 @@ import { db } from "@infrastructure/db/client";
 import { vaults, walletTransactions } from "@infrastructure/db/schema";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import {
+  pusher,
+  Channels,
+  Events,
+} from "@infrastructure/realtime/PusherAdapter";
 
 interface JoinChallengeInput {
   opponentId: string;
@@ -24,7 +29,9 @@ export class JoinChallengeUseCase {
     private readonly walletRepo: IWalletRepository,
   ) {}
 
-  async execute(input: JoinChallengeInput): Promise<Result<JoinChallengeOutput>> {
+  async execute(
+    input: JoinChallengeInput,
+  ): Promise<Result<JoinChallengeOutput>> {
     // 1. Resolve the link to a challenge
     const challenge = await this.challengeRepo.findBySlug(input.linkSlug);
     if (!challenge) return err("Challenge not found");
@@ -49,7 +56,8 @@ export class JoinChallengeUseCase {
     await this.challengeRepo.save(challenge);
 
     // 6. Update vault balance and lock it
-    await db.update(vaults)
+    await db
+      .update(vaults)
       .set({
         balanceKobo: challenge.potKobo, // now full pot (both stakes)
         status: "LOCKED",
@@ -68,6 +76,22 @@ export class JoinChallengeUseCase {
       reference: `stake_opponent_${challenge.id}`,
       note: `Stake locked for challenge: ${challenge.title}`,
     });
+
+    await pusher.emitToMany(
+      [
+        Channels.challenge(challenge.id),
+        Channels.user(challenge.creatorId), // notify creator their challenge was accepted
+      ],
+      Events.CHALLENGE_JOINED,
+      {
+        challengeId: challenge.id,
+        opponentId: input.opponentId,
+        potKobo: challenge.potKobo,
+        status: "LOCKED",
+        message: "An opponent has joined. The challenge is now locked.",
+        ts: Date.now(),
+      },
+    );
 
     return ok({
       challengeId: challenge.id,

@@ -7,6 +7,11 @@ import { vaults, walletTransactions } from "@infrastructure/db/schema";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { logger } from "@infrastructure/logger/logger";
+import {
+  pusher,
+  Channels,
+  Events,
+} from "@infrastructure/realtime/PusherAdapter";
 
 interface CancelChallengeInput {
   challengeId: string;
@@ -28,7 +33,9 @@ export class CancelChallengeUseCase {
     if (!cancelResult.success) return err(cancelResult.error.message);
 
     // Refund creator's stake
-    const creatorWallet = await this.walletRepo.findByUserId(challenge.creatorId);
+    const creatorWallet = await this.walletRepo.findByUserId(
+      challenge.creatorId,
+    );
     if (!creatorWallet) return err("Creator wallet not found");
 
     const stake = Money.fromKobo(challenge.stakeKobo);
@@ -56,7 +63,21 @@ export class CancelChallengeUseCase {
       note: `Refund: cancelled challenge "${challenge.title}"`,
     });
 
-    logger.info({ challengeId: challenge.id }, "Challenge cancelled and refunded");
+    await pusher.emit(
+      Channels.user(challenge.creatorId),
+      Events.CHALLENGE_CANCELLED,
+      {
+        challengeId: challenge.id,
+        refundedKobo: stake.kobo,
+        message: "Challenge cancelled. Your stake has been refunded.",
+        ts: Date.now(),
+      },
+    );
+
+    logger.info(
+      { challengeId: challenge.id },
+      "Challenge cancelled and refunded",
+    );
     return ok(undefined);
   }
 }

@@ -1,14 +1,21 @@
 import { IWalletRepository } from "@domain/wallet/IWalletRepository";
-import { FeeCalculator } from "@domain/settlement/FeeCalculator";
 import { Money } from "@domain/shared/Money";
 import { Result, ok, err } from "@domain/shared/Result";
 import { db } from "@infrastructure/db/client";
 import {
-  challengeBets, betEntries, walletTransactions, challenges,
+  challengeBets,
+  betEntries,
+  walletTransactions,
+  challenges,
 } from "@infrastructure/db/schema";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { logger } from "@infrastructure/logger/logger";
+import {
+  pusher,
+  Channels,
+  Events,
+} from "@infrastructure/realtime/PusherAdapter";
 
 interface SettleBetInput {
   betId: string;
@@ -20,10 +27,12 @@ interface SettleBetInput {
 export class SettleBetUseCase {
   constructor(private readonly walletRepo: IWalletRepository) {}
 
-  async execute(input: SettleBetInput): Promise<Result<{
-    outcome: "WINNER_FOUND" | "REFUNDED" | "CLOSEST_WINS";
-    winnersCount: number;
-  }>> {
+  async execute(input: SettleBetInput): Promise<
+    Result<{
+      outcome: "WINNER_FOUND" | "REFUNDED" | "CLOSEST_WINS";
+      winnersCount: number;
+    }>
+  > {
     const bet = await db
       .select()
       .from(challengeBets)
@@ -84,12 +93,17 @@ export class SettleBetUseCase {
     }
 
     // CLOSEST_WINS or perfect score found — pay winners
-    return this.payWinners(bet[0], winners.map((w) => w.entry), challenge[0]!.creatorId, entries);
+    return this.payWinners(
+      bet[0],
+      winners.map((w) => w.entry),
+      challenge[0]!.creatorId,
+      entries,
+    );
   }
 
   private async refundAll(
     bet: typeof challengeBets.$inferSelect,
-    entries: typeof betEntries.$inferSelect[],
+    entries: (typeof betEntries.$inferSelect)[],
     reason: string,
   ): Promise<Result<{ outcome: "REFUNDED"; winnersCount: number }>> {
     const entryFee = Money.fromKobo(Number(bet.entryFeeKobo));
@@ -105,7 +119,8 @@ export class SettleBetUseCase {
       wallet.credit(refundAmount);
       await this.walletRepo.save(wallet);
 
-      await db.update(betEntries)
+      await db
+        .update(betEntries)
         .set({ status: "REFUNDED" })
         .where(eq(betEntries.id, entry.id));
 
@@ -121,9 +136,18 @@ export class SettleBetUseCase {
       });
     }
 
-    await db.update(challengeBets)
+    await db
+      .update(challengeBets)
       .set({ status: "REFUNDED", updatedAt: new Date() })
       .where(eq(challengeBets.id, bet.id));
+
+    // In refundAll, after updating bet status:
+    await pusher.emit(Channels.bet(bet.id), Events.BET_REFUNDED, {
+      betId: bet.id,
+      reason,
+      refundAmountKobo: refundAmount.kobo,
+      ts: Date.now(),
+    });
 
     logger.info({ betId: bet.id, reason }, "Bet refunded");
     return ok({ outcome: "REFUNDED", winnersCount: 0 });
@@ -131,10 +155,12 @@ export class SettleBetUseCase {
 
   private async payWinners(
     bet: typeof challengeBets.$inferSelect,
-    winnerEntries: typeof betEntries.$inferSelect[],
+    winnerEntries: (typeof betEntries.$inferSelect)[],
     creatorId: string,
-    allEntries: typeof betEntries.$inferSelect[],
-  ): Promise<Result<{ outcome: "WINNER_FOUND" | "CLOSEST_WINS"; winnersCount: number }>> {
+    allEntries: (typeof betEntries.$inferSelect)[],
+  ): Promise<
+    Result<{ outcome: "WINNER_FOUND" | "CLOSEST_WINS"; winnersCount: number }>
+  > {
     const totalPot = Money.fromKobo(Number(bet.potKobo));
 
     // Platform fee: 3%
@@ -158,7 +184,8 @@ export class SettleBetUseCase {
       wallet.credit(perWinner);
       await this.walletRepo.save(wallet);
 
-      await db.update(betEntries)
+      await db
+        .update(betEntries)
         .set({ status: "WON" })
         .where(eq(betEntries.id, entry.id));
 
@@ -196,18 +223,33 @@ export class SettleBetUseCase {
     const winnerIds = new Set(winnerEntries.map((e) => e.id));
     for (const entry of allEntries) {
       if (!winnerIds.has(entry.id)) {
-        await db.update(betEntries)
+        await db
+          .update(betEntries)
           .set({ status: "LOST" })
           .where(eq(betEntries.id, entry.id));
       }
     }
 
-    await db.update(challengeBets)
+    await db
+      .update(challengeBets)
       .set({ status: "SETTLED", updatedAt: new Date() })
       .where(eq(challengeBets.id, bet.id));
 
     const outcome = winnerEntries.length > 1 ? "CLOSEST_WINS" : "WINNER_FOUND";
-    logger.info({ betId: bet.id, winnersCount: winnerEntries.length }, "Bet settled");
+
+    // In payWinners, after updating bet status:
+    await pusher.emit(Channels.bet(bet.id), Events.BET_SETTLED, {
+      betId: bet.id,
+      outcome,
+      winnersCount: winnerEntries.length,
+      perWinnerKobo,
+      ts: Date.now(),
+    });
+    
+    logger.info(
+      { betId: bet.id, winnersCount: winnerEntries.length },
+      "Bet settled",
+    );
     return ok({ outcome, winnersCount: winnerEntries.length });
   }
 }

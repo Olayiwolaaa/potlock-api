@@ -7,11 +7,16 @@ import { vaults, walletTransactions } from "@infrastructure/db/schema";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { logger } from "@infrastructure/logger/logger";
+import {
+  pusher,
+  Channels,
+  Events,
+} from "@infrastructure/realtime/PusherAdapter";
 
 interface SettleInput {
   challengeId: string;
-  declarerId: string;   // who is submitting the result
-  winnerId: string;     // who they say won
+  declarerId: string; // who is submitting the result
+  winnerId: string; // who they say won
 }
 
 interface SettleOutput {
@@ -31,7 +36,10 @@ export class SettleChallengeUseCase {
     if (!challenge) return err("Challenge not found");
 
     // Domain enforces who can declare and validates the winner
-    const declareResult = challenge.declareWinner(input.declarerId, input.winnerId);
+    const declareResult = challenge.declareWinner(
+      input.declarerId,
+      input.winnerId,
+    );
     if (!declareResult.success) return err(declareResult.error.message);
 
     const outcome = declareResult.value;
@@ -51,7 +59,8 @@ export class SettleChallengeUseCase {
       await this.walletRepo.save(winnerWallet);
 
       // Release the vault
-      await db.update(vaults)
+      await db
+        .update(vaults)
         .set({ status: "RELEASED", updatedAt: new Date() })
         .where(eq(vaults.challengeId, challenge.id));
 
@@ -79,7 +88,31 @@ export class SettleChallengeUseCase {
         note: `Platform fee for challenge: ${challenge.title}`,
       });
 
-      logger.info({ challengeId: challenge.id, winnerId: input.winnerId }, "Challenge settled");
+      // After crediting winner and updating vault (in the SETTLED branch):
+      await pusher.emitToMany(
+        [
+          Channels.challenge(challenge.id),
+          Channels.user(input.winnerId), // winner gets personal notification
+          Channels.user(
+            input.winnerId === challenge.creatorId // notify the loser too
+              ? challenge.opponentId!
+              : challenge.creatorId,
+          ),
+        ],
+        Events.CHALLENGE_SETTLED,
+        {
+          challengeId: challenge.id,
+          winnerId: input.winnerId,
+          winnerPayout: fees.winnerPayout.kobo,
+          platformFee: fees.platformFee.kobo,
+          ts: Date.now(),
+        },
+      );
+
+      logger.info(
+        { challengeId: challenge.id, winnerId: input.winnerId },
+        "Challenge settled",
+      );
 
       return ok({
         outcome: "SETTLED",
@@ -90,9 +123,21 @@ export class SettleChallengeUseCase {
 
     // Both declared different winners — freeze vault
     if (outcome === "DISPUTED") {
-      await db.update(vaults)
+      await db
+        .update(vaults)
         .set({ status: "FROZEN", updatedAt: new Date() })
         .where(eq(vaults.challengeId, challenge.id));
+
+      await pusher.emit(
+        Channels.challenge(challenge.id),
+        Events.CHALLENGE_DISPUTED,
+        {
+          challengeId: challenge.id,
+          message:
+            "Declarations conflict. The vault is frozen pending resolution.",
+          ts: Date.now(),
+        },
+      );
 
       logger.warn({ challengeId: challenge.id }, "Challenge disputed");
       return ok({ outcome: "DISPUTED" });

@@ -4,6 +4,11 @@ import { Result, ok, err } from "@domain/shared/Result";
 import { db } from "@infrastructure/db/client";
 import { walletTransactions } from "@infrastructure/db/schema";
 import { logger } from "@infrastructure/logger/logger";
+import {
+  pusher,
+  Channels,
+  Events,
+} from "@infrastructure/realtime/PusherAdapter";
 
 interface FundWalletInput {
   userId: string;
@@ -48,7 +53,18 @@ export class FundWalletUseCase {
       note: `Wallet funded via Paystack`,
     });
 
-    logger.info({ userId, amountKobo, reference: paystackReference }, "Wallet funded");
+    await pusher.emit(Channels.user(input.userId), Events.WALLET_CREDITED, {
+      amountKobo,
+      newBalanceKobo: wallet.balance.kobo,
+      purpose: "WALLET_FUNDING",
+      message: `Your wallet has been credited ${Money.fromKobo(amountKobo).toString()}`,
+      ts: Date.now(),
+    });
+
+    logger.info(
+      { userId, amountKobo, reference: paystackReference },
+      "Wallet funded",
+    );
 
     return ok({
       newBalanceKobo: wallet.balance.kobo,

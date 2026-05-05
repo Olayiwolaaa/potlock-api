@@ -2,9 +2,18 @@ import { IWalletRepository } from "@domain/wallet/IWalletRepository";
 import { Money } from "@domain/shared/Money";
 import { Result, ok, err } from "@domain/shared/Result";
 import { db } from "@infrastructure/db/client";
-import { challengeBets, betEntries, walletTransactions } from "@infrastructure/db/schema";
+import {
+  challengeBets,
+  betEntries,
+  walletTransactions,
+} from "@infrastructure/db/schema";
 import { eq } from "drizzle-orm";
 import { randomUUID, createHash } from "crypto";
+import {
+  pusher,
+  Channels,
+  Events,
+} from "@infrastructure/realtime/PusherAdapter";
 
 // A prediction is an array of match picks
 export interface MatchPrediction {
@@ -21,7 +30,9 @@ interface PlaceBetEntryInput {
 export class PlaceBetEntryUseCase {
   constructor(private readonly walletRepo: IWalletRepository) {}
 
-  async execute(input: PlaceBetEntryInput): Promise<Result<{ entryId: string }>> {
+  async execute(
+    input: PlaceBetEntryInput,
+  ): Promise<Result<{ entryId: string }>> {
     // Get the bet
     const bet = await db
       .select()
@@ -30,7 +41,8 @@ export class PlaceBetEntryUseCase {
       .limit(1);
 
     if (!bet[0]) return err("Bet not found");
-    if (bet[0].status !== "OPEN") return err("This bet is no longer accepting entries");
+    if (bet[0].status !== "OPEN")
+      return err("This bet is no longer accepting entries");
 
     // Check max bettors not exceeded
     const existingEntries = await db
@@ -43,8 +55,11 @@ export class PlaceBetEntryUseCase {
     }
 
     // Check bettor hasn't already entered
-    const alreadyEntered = existingEntries.find((e) => e.bettorId === input.bettorId);
-    if (alreadyEntered) return err("You have already placed a bet on this challenge");
+    const alreadyEntered = existingEntries.find(
+      (e) => e.bettorId === input.bettorId,
+    );
+    if (alreadyEntered)
+      return err("You have already placed a bet on this challenge");
 
     // Hash the prediction for uniqueness check
     // Sorted by matchId so order doesn't matter
@@ -52,7 +67,9 @@ export class PlaceBetEntryUseCase {
       a.matchId.localeCompare(b.matchId),
     );
     const predictionJson = JSON.stringify(sortedPredictions);
-    const predictionHash = createHash("sha256").update(predictionJson).digest("hex");
+    const predictionHash = createHash("sha256")
+      .update(predictionJson)
+      .digest("hex");
 
     // Check prediction uniqueness across all entries for this bet
     const duplicatePrediction = existingEntries.find(
@@ -107,6 +124,15 @@ export class PlaceBetEntryUseCase {
       purpose: "CHALLENGE_STAKE",
       reference: `bet_entry_${entryId}`,
       note: `Bet entry fee`,
+    });
+
+    await pusher.emit(Channels.bet(input.betId), Events.BET_ENTRY_PLACED, {
+      betId: input.betId,
+      // Don't expose the bettor's identity or prediction to others
+      // Only broadcast aggregate data
+      newEntryCount: existingEntries.length + 1,
+      newPotKobo: Number(bet[0].potKobo) + entryFee.kobo,
+      ts: Date.now(),
     });
 
     return ok({ entryId });

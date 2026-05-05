@@ -2,20 +2,30 @@ import { Result, ok, err } from "@domain/shared/Result";
 import { BracketGenerator } from "@domain/tournament/BracketGenerator";
 import { db } from "@infrastructure/db/client";
 import {
-  tournaments, tournamentMatches, tournamentParticipants, challenges,
+  tournaments,
+  tournamentMatches,
+  tournamentParticipants,
+  challenges,
 } from "@infrastructure/db/schema";
 import { eq, and } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import {
+  pusher,
+  Channels,
+  Events,
+} from "@infrastructure/realtime/PusherAdapter";
 
 interface RecordMatchResultInput {
   tournamentId: string;
   matchId: string;
-  winnerId: string;   // participantId of the winner
+  winnerId: string; // participantId of the winner
   requesterId: string; // must be challenge creator
 }
 
 export class RecordMatchResultUseCase {
-  async execute(input: RecordMatchResultInput): Promise<Result<{ advancedTo: string | null }>> {
+  async execute(
+    input: RecordMatchResultInput,
+  ): Promise<Result<{ advancedTo: string | null }>> {
     // Verify tournament exists and requester is challenge creator
     const tournament = await db
       .select()
@@ -47,15 +57,33 @@ export class RecordMatchResultUseCase {
     if (match[0].status === "COMPLETED") return err("Match already completed");
 
     // Validate winner is a participant in this match
-    if (match[0].player1Id !== input.winnerId && match[0].player2Id !== input.winnerId) {
+    if (
+      match[0].player1Id !== input.winnerId &&
+      match[0].player2Id !== input.winnerId
+    ) {
       return err("Winner must be a participant in this match");
     }
 
     // Record result
     await db
       .update(tournamentMatches)
-      .set({ winnerId: input.winnerId, status: "COMPLETED", updatedAt: new Date() })
+      .set({
+        winnerId: input.winnerId,
+        status: "COMPLETED",
+        updatedAt: new Date(),
+      })
       .where(eq(tournamentMatches.id, input.matchId));
+
+    await pusher.emit(
+      Channels.tournament(input.tournamentId),
+      Events.MATCH_RESULT_RECORDED,
+      {
+        tournamentId: input.tournamentId,
+        matchId: input.matchId,
+        winnerId: input.winnerId,
+        ts: Date.now(),
+      },
+    );
 
     // Check if there are more matches in this round
     const nextRoundInfo = BracketGenerator.getNextRoundMatch(
@@ -64,9 +92,10 @@ export class RecordMatchResultUseCase {
     );
 
     // Find the paired match (the other match that feeds into the same next-round slot)
-    const pairedMatchNumber = match[0].matchNumber % 2 === 1
-      ? match[0].matchNumber + 1
-      : match[0].matchNumber - 1;
+    const pairedMatchNumber =
+      match[0].matchNumber % 2 === 1
+        ? match[0].matchNumber + 1
+        : match[0].matchNumber - 1;
 
     const pairedMatch = await db
       .select()
@@ -95,6 +124,19 @@ export class RecordMatchResultUseCase {
         createdAt: new Date(),
         updatedAt: new Date(),
       });
+
+      if (nextMatchId) {
+        await pusher.emit(
+          Channels.tournament(input.tournamentId),
+          Events.NEXT_MATCH_CREATED,
+          {
+            tournamentId: input.tournamentId,
+            nextMatchId,
+            round: nextRoundInfo.round,
+            ts: Date.now(),
+          },
+        );
+      }
 
       return ok({ advancedTo: nextMatchId });
     }
