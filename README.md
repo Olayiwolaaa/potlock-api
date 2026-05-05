@@ -1,13 +1,13 @@
-# PotLockNg (Working Title) ⚖️
+# PotLockNg (Working Title)
 
 **The Decentralized Wagering & Escrow Engine for the Nigerian Content Creator Economy.**
 
 PotLockNg is a high-trust social wagering platform designed to act as a neutral "digital judge." It allows TikTok streamers, iMessage gamers, and tournament organizers to create secure "Challenge Vaults" where participants lock in wagers and sponsors boost prize pools. By moving funds into a secure escrow, PotLockNg eliminates "trust-based" payment issues and professionalizes social betting.
 
-## 🚀 The Vision
+## The Vision
 To provide the financial infrastructure for the booming Nigerian entertainment sector, allowing creators to monetize their skills and engagement through high-stakes, spectator-friendly wagering.
 
-## 🛠 Tech Stack
+## Tech Stack
 - **Frontend:** Next.js (App Router), Tailwind CSS, Framer Motion.
 - **Backend:** Node.js (Hono/Fastify) or Laravel.
 - **Database:** PostgreSQL with Drizzle ORM.
@@ -15,7 +15,7 @@ To provide the financial infrastructure for the booming Nigerian entertainment s
 - **Real-time:** Pusher (for live pot updates and join notifications).
 - **Auth:** Better Auth or NextAuth.js.
 
-## 🏗 System Architecture
+## System Architecture
 
 ### 1. The Challenge Vault
 The core unit of the application. A vault governs the lifecycle of a single wager:
@@ -30,7 +30,7 @@ The platform operates on a **Fee-on-Settlement** logic:
 - **Sponsored Events:** 5% platform fee on sponsorship injections.
 - **Withdrawal:** Flat ₦50 processing fee per payout.
 
-## 🗺 Features & Roadmap
+## Features & Roadmap
 
 ### Phase 1: MVP (Current)
 - [ ] **One-Click Challenge Links:** Shareable URLs for social media bios.
@@ -47,8 +47,8 @@ The platform operates on a **Fee-on-Settlement** logic:
 - [ ] **AI Screenshot Verification:** Automated winner detection via OCR.
 - [ ] **API Integrations:** Direct hooks for popular gaming platforms.
 
-## 🔧 Installation & Setup
+## Installation & Setup
 
 1. **Clone the repository**
    ```bash
-   git clone [https://github.com/Olayiwolaaa/potlockng.git](https://github.com/Olayiwolaaa/potlockng.git)
+   git clone [https://github.com/Olayiwolaaa/potlockng-api.git](https://github.com/Olayiwolaaa/potlockng-api.git)

@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "types": ["bun-types"],
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitReturns": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "paths": {
+      "@src/*": ["./src/*"],
+      "@domain/*": ["./src/domain/*"],
+      "@middleware/*": ["./src/middleware/*"],
+      "@application/*": ["./src/application/*"],
+      "@infrastructure/*": ["./src/infrastructure/*"],
+      "@api/*": ["./src/api/*"],
+      "@config/*": ["./src/config/*"]
+    }
+  },
+  "include": ["src/**/*", "test/**/*", "drizzle.config.ts"],
+  "exclude": ["node_modules", "dist"]
+}
