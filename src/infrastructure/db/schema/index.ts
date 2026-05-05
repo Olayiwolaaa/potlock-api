@@ -3,3 +3,7 @@ export * from "./wallets";
 export * from "./wallet_transactions";
 export * from "./challenges";
 export * from "./vaults";
+export * from "./bank_accounts";
+export * from "./kyc";
+export * from "./tournaments";
+export * from "./bets";

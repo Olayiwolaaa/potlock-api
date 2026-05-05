@@ -14,13 +14,18 @@ import {
 } from "@api/schemas/challenge.schemas";
 import { AppEnv } from "@api/types";
 import { successResponse, errorResponse } from "@api/schemas/common.schemas";
+import { GetUserChallengesUseCase } from "@application/challenge/GetUserChallengesUseCase";
+import { challengeListSchema } from "@api/schemas/challenge.schemas";
+import { paginationQuery } from "@api/schemas/wallet.schemas";
 
+const getUserChallenges = new GetUserChallengesUseCase();
 const challengeRepo = new ChallengeRepository();
 const walletRepo = new WalletRepository();
 const createChallenge = new CreateChallengeUseCase(challengeRepo, walletRepo);
 const joinChallenge = new JoinChallengeUseCase(challengeRepo, walletRepo);
 const settleChallenge = new SettleChallengeUseCase(challengeRepo, walletRepo);
 const challengeRoutes = new OpenAPIHono<AppEnv>();
+
 challengeRoutes.use("*", requireAuth);
 
 // --- Create Challenge ---
@@ -165,6 +170,33 @@ challengeRoutes.openapi(
     if (!result.success) return c.json({ success: false as const, error: result.error }, 400);
 
     return c.json({ success: true, data: result.value });
+  },
+);
+
+challengeRoutes.openapi(
+  createRoute({
+    method: "get",
+    path: "/my",
+    tags: ["Challenges"],
+    summary: "Get my challenges",
+    description: "All challenges you created or joined, newest first.",
+    security: [{ bearerAuth: [] }],
+    request: { query: paginationQuery },
+    responses: {
+      200: {
+        content: { "application/json": { schema: challengeListSchema } },
+        description: "Your challenges",
+      },
+    },
+  }),
+  async (c) => {
+    const userId = c.get("userId");
+    const { limit, offset } = c.req.valid("query");
+
+    const result = await getUserChallenges.execute({ userId, limit, offset });
+    if (!result.success) return c.json({ success: false as const, error: result.error }, 400);
+
+    return c.json({ success: true as const, data: result.value });
   },
 );
 

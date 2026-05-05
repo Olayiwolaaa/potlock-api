@@ -29,4 +29,25 @@ export const settleResponseSchema = successResponse(
   }),
 ).openapi("SettleResponse");
 
+export const challengeListSchema = successResponse(
+  z.object({
+    challenges: z.array(
+      z.object({
+        id: z.string(),
+        title: z.string(),
+        stakeKobo: z.number(),
+        potKobo: z.number(),
+        status: z.string(),
+        linkSlug: z.string(),
+        role: z.enum(["CREATOR", "OPPONENT"]),
+        creatorId: z.string(),
+        opponentId: z.string().nullable(),
+        expiresAt: z.string(),
+        createdAt: z.string(),
+      }),
+    ),
+    total: z.number(),
+  }),
+).openapi("ChallengeList");
+
 export { errorResponse };

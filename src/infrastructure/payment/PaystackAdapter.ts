@@ -1,32 +1,203 @@
 import { env } from "@config/env";
+import { logger } from "@infrastructure/logger/logger";
 
-interface PaystackVerifyResponse {
-  status: boolean;
-  data: {
-    status: string;           // "success" | "failed"
-    amount: number;           // in kobo already
-    reference: string;
-    metadata: {
-      userId: string;         // we'll pass this when initializing payment
-    };
+// --- Types ---
+export interface InitializePaymentParams {
+  email: string;
+  amountKobo: number;
+  reference: string;
+  metadata: {
+    userId: string;
+    purpose: "wallet_funding";
+  };
+  callbackUrl?: string;
+}
+
+export interface InitializePaymentResult {
+  authorizationUrl: string;
+  accessCode: string;
+  reference: string;
+}
+
+export interface VerifyPaymentResult {
+  status: "success" | "failed" | "abandoned";
+  amountKobo: number;
+  reference: string;
+  metadata: {
+    userId: string;
+    purpose: string;
   };
 }
 
+export interface VerifyAccountResult {
+  accountName: string;
+  accountNumber: string;
+  bankCode: string;
+}
+
+export interface CreateRecipientResult {
+  recipientCode: string;
+  accountName: string;
+}
+
+export interface InitiateTransferResult {
+  transferCode: string;
+  status: "pending" | "success" | "failed";
+}
+
+// --- Adapter ---
 export class PaystackAdapter {
-  private readonly baseUrl = "https://api.paystack.co";
+  private readonly baseUrl = env.PAYSTACK_BASE_URL;
   private readonly headers = {
     Authorization: `Bearer ${env.PAYSTACK_SECRET_KEY}`,
     "Content-Type": "application/json",
   };
 
-  async verifyTransaction(reference: string): Promise<PaystackVerifyResponse["data"] | null> {
-    const res = await fetch(`${this.baseUrl}/transaction/verify/${reference}`, {
-      headers: this.headers,
+  private async request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+  ): Promise<T | null> {
+    try {
+      const res = await fetch(`${this.baseUrl}${path}`, {
+        method,
+        headers: this.headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.status) {
+        logger.error(
+          { path, status: res.status, message: data.message },
+          "Paystack error",
+        );
+        return null;
+      }
+
+      return data.data as T;
+    } catch (error) {
+      logger.error({ path, error }, "Paystack request failed");
+      return null;
+    }
+  }
+
+  // Step 1 of funding: create a checkout session
+  async initializePayment(
+    params: InitializePaymentParams,
+  ): Promise<InitializePaymentResult | null> {
+    // Tell TypeScript what Paystack ACTUALLY returns (snake_case)
+    const data = await this.request<{
+      authorization_url: string;
+      access_code: string;
+      reference: string;
+    }>("POST", "/transaction/initialize", {
+      email: params.email,
+      amount: params.amountKobo,
+      reference: params.reference,
+      metadata: params.metadata,
+      callback_url: params.callbackUrl,
     });
 
-    if (!res.ok) return null;
+    if (!data) return null;
 
-    const data: PaystackVerifyResponse = await res.json();
-    return data.status ? data.data : null;
+    // Map to your camelCase shape here, once, in one place
+    return {
+      authorizationUrl: data.authorization_url,
+      accessCode: data.access_code,
+      reference: data.reference,
+    };
+  }
+
+  // Verify a payment (called in webhook handler)
+  async verifyPayment(reference: string): Promise<VerifyPaymentResult | null> {
+    const data = await this.request<{
+      status: string;
+      amount: number;
+      reference: string;
+      metadata: { userId: string; purpose: string };
+    }>("GET", `/transaction/verify/${reference}`);
+
+    if (!data) return null;
+
+    return {
+      status: data.status as VerifyPaymentResult["status"],
+      amountKobo: data.amount,
+      reference: data.reference,
+      metadata: data.metadata,
+    };
+  }
+
+  // Verify bank account before saving it
+  async verifyAccount(
+    accountNumber: string,
+    bankCode: string,
+  ): Promise<VerifyAccountResult | null> {
+    const data = await this.request<{
+      account_name: string;
+      account_number: string;
+    }>(
+      "GET",
+      `/bank/resolve?account_number=${accountNumber}&bank_code=${bankCode}`,
+    );
+
+    if (!data) return null;
+
+    return {
+      accountName: data.account_name,
+      accountNumber: data.account_number,
+      bankCode,
+    };
+  }
+
+  // Create a transfer recipient (required before sending money)
+  async createRecipient(params: {
+    accountName: string;
+    accountNumber: string;
+    bankCode: string;
+  }): Promise<CreateRecipientResult | null> {
+    const data = await this.request<{
+      recipient_code: string; // ← snake_case from Paystack
+      details: { account_name: string };
+    }>("POST", "/transferrecipient", {
+      type: "nuban",
+      name: params.accountName,
+      account_number: params.accountNumber,
+      bank_code: params.bankCode,
+      currency: "NGN",
+    });
+
+    if (!data) return null;
+
+    return {
+      recipientCode: data.recipient_code,
+      accountName: data.details.account_name,
+    };
+  }
+
+  // Send money to a recipient
+  async initiateTransfer(params: {
+    amountKobo: number;
+    recipientCode: string;
+    reference: string;
+    reason: string;
+  }): Promise<InitiateTransferResult | null> {
+    const data = await this.request<{
+      transfer_code: string;
+      status: string;
+    }>("POST", "/transfer", {
+      source: "balance",
+      amount: params.amountKobo,
+      recipient: params.recipientCode,
+      reference: params.reference,
+      reason: params.reason,
+    });
+
+    if (!data) return null;
+
+    return {
+      transferCode: data.transfer_code,
+      status: data.status as InitiateTransferResult["status"],
+    };
   }
 }

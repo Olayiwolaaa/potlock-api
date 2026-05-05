@@ -5,8 +5,9 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
   DATABASE_URL: z.url(),
   JWT_SECRET: z.string().min(32),
+  PAYSTACK_BASE_URL: z.url().default("https://api.paystack.co"),
   PAYSTACK_SECRET_KEY: z.string().startsWith("sk_"),
-  PAYSTACK_WEBHOOK_SECRET: z.string(),
+  PAYSTACK_WEBHOOK_SECRET: z.string().min(1),
   REDIS_URL: z.url(),
 });
 
