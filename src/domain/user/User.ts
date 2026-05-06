@@ -1,3 +1,4 @@
+import { err, ok, Result } from "@domain/shared/Result";
 export type UserRole = "user" | "admin";
 
 export class User {
@@ -44,8 +45,22 @@ export class User {
     return this.role === "admin";
   }
 
-  static validateEmail(email: string) { /* unchanged */ }
-  static validatePhone(phone: string) { /* unchanged */ }
+  static validateEmail(email: string): Result<string> {
+    const trimmed = email.trim();
+    if (!trimmed.includes("@")) {
+      return err("Invalid email format");
+    }
+    // Return the normalized version in the Result value
+    return ok(trimmed.toLowerCase());
+  }
+
+  static validatePhone(phone: string): Result<string> {
+    const phoneRegex = /^(?:\+?234|0)[789]\d{9}$/;
+    if (!phoneRegex.test(phone)) {
+      return err("Invalid phone number format");
+    }
+    return ok(phone);
+  }
 
   toRecord() {
     return {

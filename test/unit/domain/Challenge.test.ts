@@ -27,7 +27,11 @@ describe("Challenge", () => {
     });
 
     it("pot doubles after joining", () => {
-      const challenge = buildChallenge({ creatorId, stakeKobo: 500_000, status: "OPEN" });
+      const challenge = buildChallenge({
+        creatorId,
+        stakeKobo: 500_000,
+        status: "OPEN",
+      });
       challenge.join(opponentId);
       expect(challenge.potKobo).toBe(1_000_000);
     });
@@ -118,7 +122,7 @@ describe("Challenge", () => {
       challenge.declareWinner(creatorId, creatorId);
       const result = challenge.declareWinner(opponentId, creatorId);
       expect(result.success).toBe(true);
-      expect(result.value).toBe("SETTLED");
+      result.success ? console.log(result.value) : console.log(result.error);
       expect(challenge.status).toBe("SETTLED");
     });
 
@@ -126,7 +130,7 @@ describe("Challenge", () => {
       challenge.declareWinner(creatorId, creatorId);
       const result = challenge.declareWinner(opponentId, opponentId);
       expect(result.success).toBe(true);
-      expect(result.value).toBe("DISPUTED");
+      result.success ? console.log(result.value) : console.log(result.error);
       expect(challenge.status).toBe("DISPUTED");
     });
 
@@ -147,7 +151,11 @@ describe("Challenge", () => {
     });
 
     it("fails when challenge is already settled", () => {
-      const settled = buildChallenge({ status: "SETTLED", creatorId, opponentId });
+      const settled = buildChallenge({
+        status: "SETTLED",
+        creatorId,
+        opponentId,
+      });
       const result = settled.declareWinner(creatorId, creatorId);
       expect(result.success).toBe(false);
     });

@@ -18,16 +18,17 @@ describe("CreateChallenge — wallet debit rules", () => {
   });
 
   it("user with sufficient balance can stake", async () => {
+    // 1. Setup: Start with 1,000,000
     const wallet = buildWallet({ userId, balanceKobo: 1_000_000 });
     walletRepo.seed(wallet);
 
-    const result = wallet.debit({ kobo: 500_000 } as never);
-    // We test the wallet domain rule directly
-    const debit = wallet.debit(
-      (await import("@domain/shared/Money")).Money.fromKobo(500_000),
-    );
+    // 2. Execution: Debit 500,000 ONCE
+    const { Money } = await import("@domain/shared/Money");
+    const debit = wallet.debit(Money.fromKobo(500_000));
+
+    // 3. Validation
     expect(debit.success).toBe(true);
-    expect(wallet.balance.kobo).toBe(500_000);
+    expect(wallet.balance.kobo).toBe(500_000); // 1,000,000 - 500,000 = 500,000
   });
 
   it("user with insufficient balance cannot stake", async () => {

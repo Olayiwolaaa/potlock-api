@@ -39,11 +39,13 @@ export class RegisterUseCase {
 
     // 3. Check email isn't already taken
     const existingByEmail = await this.userRepo.findByEmail(email);
-    if (existingByEmail) return err("An account with this email already exists");
+    if (existingByEmail)
+      return err("An account with this email already exists");
 
     // 4. Check phone isn't already taken
     const existingByPhone = await this.userRepo.findByPhone(phoneNumber);
-    if (existingByPhone) return err("An account with this phone number already exists");
+    if (existingByPhone)
+      return err("An account with this phone number already exists");
 
     // 5. Hash password — Bun has this built in, no bcrypt needed
     const passwordHash = await Bun.password.hash(input.password, {
