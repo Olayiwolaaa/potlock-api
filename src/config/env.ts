@@ -14,6 +14,9 @@ const envSchema = z.object({
   PUSHER_KEY: z.string(),
   PUSHER_SECRET: z.string(),
   PUSHER_CLUSTER: z.string().default("mt1"),
+  CLOUDINARY_CLOUD_NAME: z.string(),
+  CLOUDINARY_API_KEY: z.string(),
+  CLOUDINARY_API_SECRET: z.string(),
   REDIS_URL: z.url(),
 });
 

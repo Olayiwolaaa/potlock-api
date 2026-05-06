@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "bun:test";
 import { Challenge } from "@domain/challenge/Challenge";
-import { buildChallenge } from "../../helpers/builders";
+import { buildChallenge } from "@test/helpers/builders";
 import { randomUUID } from "crypto";
 
 describe("Challenge", () => {

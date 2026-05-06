@@ -7,3 +7,5 @@ export * from "./bank_accounts";
 export * from "./kyc";
 export * from "./tournaments";
 export * from "./bets";
+export * from "./games";
+export * from "./game_requests";

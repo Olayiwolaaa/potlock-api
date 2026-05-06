@@ -3,6 +3,8 @@ import { db } from "../client";
 import { challenges } from "../schema";
 import { Challenge, ChallengeStatus } from "@domain/challenge/Challenge";
 import { IChallengeRepository } from "@domain/challenge/IChallengeRepository";
+import { redis } from "@infrastructure/cache/RedisClient";
+import { CacheKeys, CacheTTL } from "@infrastructure/cache/CacheKeys";
 
 export class ChallengeRepository implements IChallengeRepository {
   private toDomain(record: typeof challenges.$inferSelect): Challenge {
@@ -24,17 +26,34 @@ export class ChallengeRepository implements IChallengeRepository {
   }
 
   async findById(id: string): Promise<Challenge | null> {
-    const result = await db.select().from(challenges).where(eq(challenges.id, id)).limit(1);
+    const result = await db
+      .select()
+      .from(challenges)
+      .where(eq(challenges.id, id))
+      .limit(1);
     return result[0] ? this.toDomain(result[0]) : null;
   }
 
   async findBySlug(slug: string): Promise<Challenge | null> {
-    const result = await db.select().from(challenges).where(eq(challenges.linkSlug, slug)).limit(1);
-    return result[0] ? this.toDomain(result[0]) : null;
+    return redis.getOrSet(
+      CacheKeys.challengeBySlug(slug),
+      async () => {
+        const result = await db
+          .select()
+          .from(challenges)
+          .where(eq(challenges.linkSlug, slug))
+          .limit(1);
+        return result[0] ? this.toDomain(result[0]) : null;
+      },
+      CacheTTL.CHALLENGE_SLUG,
+    );
   }
 
   async findByCreatorId(creatorId: string): Promise<Challenge[]> {
-    const result = await db.select().from(challenges).where(eq(challenges.creatorId, creatorId));
+    const result = await db
+      .select()
+      .from(challenges)
+      .where(eq(challenges.creatorId, creatorId));
     return result.map(this.toDomain.bind(this));
   }
 
@@ -48,8 +67,11 @@ export class ChallengeRepository implements IChallengeRepository {
 
   async save(challenge: Challenge): Promise<void> {
     const record = challenge.toRecord();
-    await db.update(challenges)
+    await db
+      .update(challenges)
       .set({ ...record, updatedAt: new Date() })
       .where(eq(challenges.id, record.id));
+
+    await redis.del(CacheKeys.challengeBySlug(record.linkSlug));
   }
 }

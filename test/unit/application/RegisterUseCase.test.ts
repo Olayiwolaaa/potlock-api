@@ -3,7 +3,6 @@ import { RegisterUseCase } from "@application/auth/RegisterUseCase";
 import {
   MockUserRepository,
   MockWalletRepository,
-  buildUser,
 } from "../../helpers/builders";
 import { TokenService } from "@infrastructure/auth/TokenService";
 

@@ -3,7 +3,7 @@ import {
   MockChallengeRepository,
   MockWalletRepository,
   buildWallet,
-} from "../../helpers/builders";
+} from "@test/helpers/builders";
 import { randomUUID } from "crypto";
 
 // We test the domain rules that CreateChallengeUseCase enforces

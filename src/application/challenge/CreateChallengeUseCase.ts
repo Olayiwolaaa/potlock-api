@@ -7,13 +7,19 @@ import { db } from "@infrastructure/db/client";
 import { vaults, walletTransactions } from "@infrastructure/db/schema";
 import { randomUUID } from "crypto";
 import { nanoid } from "nanoid";
+import { CloudinaryAdapter } from "@infrastructure/storage/CloudinaryAdapter";
+import { redis } from "@infrastructure/cache/RedisClient";
+import { CacheKeys, CacheTTL } from "@infrastructure/cache/CacheKeys";
 
 interface CreateChallengeInput {
   creatorId: string;
   title: string;
   description?: string;
   stakeKobo: number;
-  expiresInHours: number; // how many hours until the open challenge expires
+  expiresInHours: number;
+  gameId?: string;                 // optional game category
+  coverImageBuffer?: Buffer;
+  coverImageMimeType?: string;
 }
 
 interface CreateChallengeOutput {
@@ -27,9 +33,12 @@ export class CreateChallengeUseCase {
   constructor(
     private readonly challengeRepo: IChallengeRepository,
     private readonly walletRepo: IWalletRepository,
+    private readonly storage?: CloudinaryAdapter,
   ) {}
 
-  async execute(input: CreateChallengeInput): Promise<Result<CreateChallengeOutput>> {
+  async execute(
+    input: CreateChallengeInput,
+  ): Promise<Result<CreateChallengeOutput>> {
     // 1. Validate stake amount
     const MIN_STAKE = Money.fromNaira(100); // ₦100 minimum
     const stake = Money.fromKobo(input.stakeKobo);
@@ -42,7 +51,10 @@ export class CreateChallengeUseCase {
     const wallet = await this.walletRepo.findByUserId(input.creatorId);
     if (!wallet) return err("Wallet not found");
 
-    if (!stake.isGreaterThan(Money.fromKobo(0)) || wallet.balance.kobo < stake.kobo) {
+    if (
+      !stake.isGreaterThan(Money.fromKobo(0)) ||
+      wallet.balance.kobo < stake.kobo
+    ) {
       return err("Insufficient wallet balance to create this challenge");
     }
 
@@ -52,10 +64,33 @@ export class CreateChallengeUseCase {
 
     await this.walletRepo.save(wallet);
 
+    let coverImageUrl: string | null = null;
+    let coverImagePublicId: string | null = null;
+
+    if (input.coverImageBuffer && input.coverImageMimeType && this.storage) {
+      const validation = CloudinaryAdapter.validateImage(
+        input.coverImageBuffer,
+        input.coverImageMimeType,
+      );
+      if (!validation.valid) return err(validation.error!);
+
+      const uploaded = await this.storage.uploadBuffer(
+        input.coverImageBuffer,
+        "potlockng/challenges",
+        { maxWidth: 1200, maxHeight: 630 }, // OG image ratio
+      );
+
+      if (!uploaded) return err("Cover image upload failed");
+      coverImageUrl = uploaded.url;
+      coverImagePublicId = uploaded.publicId;
+    }
+
     // 4. Create the challenge
     const challengeId = randomUUID();
     const linkSlug = nanoid(8); // short, URL-safe slug e.g. "V1StGXR8"
-    const expiresAt = new Date(Date.now() + input.expiresInHours * 60 * 60 * 1000);
+    const expiresAt = new Date(
+      Date.now() + input.expiresInHours * 60 * 60 * 1000,
+    );
 
     const challenge = Challenge.create({
       id: challengeId,

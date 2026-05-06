@@ -1,8 +1,6 @@
 import { describe, it, expect, beforeEach } from "bun:test";
-import { Challenge } from "@domain/challenge/Challenge";
 import { FeeCalculator } from "@domain/settlement/FeeCalculator";
-import { Money } from "@domain/shared/Money";
-import { buildChallenge, buildWallet } from "../../helpers/builders";
+import { buildChallenge, buildWallet } from "@test/helpers/builders";
 import { randomUUID } from "crypto";
 
 describe("Settlement — domain rules", () => {

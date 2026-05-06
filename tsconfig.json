@@ -8,8 +8,9 @@
     "noUncheckedIndexedAccess": true,
     "noImplicitReturns": true,
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": ".",
     "paths": {
+      "@test/*": ["./test/*"],
       "@src/*": ["./src/*"],
       "@domain/*": ["./src/domain/*"],
       "@middleware/*": ["./src/middleware/*"],

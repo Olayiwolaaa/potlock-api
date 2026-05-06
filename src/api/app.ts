@@ -9,7 +9,7 @@ import {
   apiRateLimit,
   authRateLimit,
   paymentRateLimit,
-} from "./middleware/rateLimiter";
+} from "@api/middleware/rateLimiter";
 import { authRoutes } from "@api/routes/auth.routes";
 import { walletRoutes } from "@api/routes/wallet.routes";
 import { webhookRoutes } from "@api/routes/webhook.routes";
@@ -19,6 +19,8 @@ import { kycRoutes } from "@api/routes/kyc.routes";
 import { tournamentRoutes } from "@api/routes/tournament.routes";
 import { betRoutes } from "@api/routes/bet.routes";
 import { pusherRoutes } from "@api/routes/pusher.routes";
+import { userRoutes } from "@api/routes/user.routes";
+import { gameRoutes } from "@api/routes/game.routes";
 
 export function createApp() {
   const app = new OpenAPIHono();
@@ -48,8 +50,11 @@ export function createApp() {
   app.use("/api/v1/*", apiRateLimit);
 
   app.route("/api/v1/auth", authRoutes);
+  app.route("/api/v1/users", userRoutes);
+  app.route("/api/v1/games", gameRoutes);
   app.route("/api/v1/wallet", walletRoutes);
   app.route("/api/v1/challenges", challengeRoutes);
+
   app.route("/webhooks", webhookRoutes);
 
   app.route("/api/v1/kyc", kycRoutes);

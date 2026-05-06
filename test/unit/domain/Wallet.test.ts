@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { Money } from "@domain/shared/Money";
-import { buildWallet } from "../../helpers/builders";
+import { buildWallet } from "@test/helpers/builders";
 
 describe("Wallet", () => {
   describe("credit", () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { getDailyLimit, KYC_DAILY_LIMITS } from "@domain/kyc/KycTier";
+import { getDailyLimit } from "@domain/kyc/KycTier";
 import { Money } from "@domain/shared/Money";
 
 describe("KYC daily limits", () => {

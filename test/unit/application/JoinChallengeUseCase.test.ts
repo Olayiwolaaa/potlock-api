@@ -1,12 +1,9 @@
 import { describe, it, expect, beforeEach } from "bun:test";
-import { Challenge } from "@domain/challenge/Challenge";
 import { Money } from "@domain/shared/Money";
 import {
-  MockChallengeRepository,
-  MockWalletRepository,
   buildChallenge,
   buildWallet,
-} from "../../helpers/builders";
+} from "@test/helpers/builders";
 import { randomUUID } from "crypto";
 
 // Test the join flow using domain objects directly
