@@ -1,7 +1,7 @@
 import { IUserRepository } from "@domain/user/IUserRepository";
 import { IWalletRepository } from "@domain/wallet/IWalletRepository";
 import { TokenService } from "@infrastructure/auth/TokenService";
-import { GoogleOAuthService, GoogleUserInfo } from "@src/infrastructure/auth/GoogleOAuthService";
+import { GoogleOAuthService } from "@infrastructure/auth/GoogleOAuthService";
 import { Result, ok, err } from "@domain/shared/Result";
 import { randomUUID } from "crypto";
 

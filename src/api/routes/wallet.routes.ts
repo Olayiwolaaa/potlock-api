@@ -11,7 +11,6 @@ import { PaystackAdapter } from "@infrastructure/payment/PaystackAdapter";
 import { InitializePaymentUseCase } from "@application/wallet/InitializePaymentUseCase";
 import { AddBankAccountUseCase } from "@application/wallet/AddBankAccountUseCase";
 import { WithdrawUseCase } from "@application/wallet/WithdrawUseCase";
-import { NotFoundError } from "@domain/shared/DomainError";
 import { errorResponse } from "@api/schemas/common.schemas";
 import {
   walletBalanceSchema,
@@ -55,12 +54,18 @@ walletRoutes.openapi(
         content: { "application/json": { schema: errorResponse } },
         description: "Unauthorized",
       },
+      404: {
+        content: { "application/json": { schema: errorResponse } },
+        description: "Wallet not found",
+      },
     },
   }),
   async (c) => {
     const userId = c.get("userId");
     const wallet = await walletRepo.findByUserId(userId);
-    if (!wallet) throw new NotFoundError("Wallet");
+    if (!wallet) {
+      return c.json({ success: false as const, error: "Wallet not found" }, 404);
+    }
 
     return c.json({
       success: true as const,
@@ -69,10 +74,11 @@ walletRoutes.openapi(
         balanceNaira: wallet.balance.naira,
         display: wallet.balance.toString(),
       },
-    });
+    }, 200);
   },
 );
 
+// --- Transaction History ---
 walletRoutes.openapi(
   createRoute({
     method: "get",
@@ -88,6 +94,10 @@ walletRoutes.openapi(
         content: { "application/json": { schema: transactionHistorySchema } },
         description: "Transaction history",
       },
+      400: {
+        content: { "application/json": { schema: errorResponse } },
+        description: "Bad request",
+      },
     },
   }),
   async (c) => {
@@ -102,7 +112,7 @@ walletRoutes.openapi(
     if (!result.success)
       return c.json({ success: false as const, error: result.error }, 400);
 
-    return c.json({ success: true as const, data: result.value });
+    return c.json({ success: true as const, data: result.value }, 200);
   },
 );
 
@@ -145,7 +155,7 @@ walletRoutes.openapi(
     if (!result.success)
       return c.json({ success: false as const, error: result.error }, 400);
 
-    return c.json({ success: true as const, data: result.value });
+    return c.json({ success: true as const, data: result.value }, 200);
   },
 );
 
@@ -234,7 +244,7 @@ walletRoutes.openapi(
         bankName: a.bankName,
         isDefault: a.isDefault,
       })),
-    });
+    }, 200);
   },
 );
 
@@ -273,7 +283,7 @@ walletRoutes.openapi(
     if (!result.success)
       return c.json({ success: false as const, error: result.error }, 400);
 
-    return c.json({ success: true as const, data: result.value });
+    return c.json({ success: true as const, data: result.value }, 200);
   },
 );
 

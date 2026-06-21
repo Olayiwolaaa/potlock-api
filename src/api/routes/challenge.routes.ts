@@ -5,7 +5,6 @@ import { WalletRepository } from "@infrastructure/db/repositories/WalletReposito
 import { CreateChallengeUseCase } from "@application/challenge/CreateChallengeUseCase";
 import { JoinChallengeUseCase } from "@application/challenge/JoinChallengeUseCase";
 import { SettleChallengeUseCase } from "@application/challenge/SettleChallengeUseCase";
-import { NotFoundError } from "@domain/shared/DomainError";
 import {
   createChallengeBodySchema,
   declarWinnerBodySchema,
@@ -56,7 +55,7 @@ challengeRoutes.openapi(
   },
 );
 
-// --- Get Challenge by Slug (public — no auth needed for shareable link) ---
+// --- Get Challenge by Slug ---
 challengeRoutes.openapi(
   createRoute({
     method: "get",
@@ -89,10 +88,12 @@ challengeRoutes.openapi(
   async (c) => {
     const { slug } = c.req.valid("param");
     const challenge = await challengeRepo.findBySlug(slug);
-    if (!challenge) throw new NotFoundError("Challenge");
+    if (!challenge) {
+      return c.json({ success: false as const, error: "Challenge not found" }, 404);
+    }
 
     return c.json({
-      success: true,
+      success: true as const,
       data: {
         id: challenge.id,
         title: challenge.title,
@@ -101,7 +102,7 @@ challengeRoutes.openapi(
         creatorId: challenge.creatorId,
         expiresAt: challenge.expiresAt.toISOString(),
       },
-    });
+    }, 200);
   },
 );
 
@@ -139,7 +140,7 @@ challengeRoutes.openapi(
     const result = await joinChallenge.execute({ opponentId, linkSlug: slug });
     if (!result.success) return c.json({ success: false as const, error: result.error }, 400);
 
-    return c.json({ success: true, data: result.value });
+    return c.json({ success: true as const, data: result.value }, 200);
   },
 );
 
@@ -169,10 +170,11 @@ challengeRoutes.openapi(
     const result = await settleChallenge.execute({ challengeId: id, declarerId, winnerId });
     if (!result.success) return c.json({ success: false as const, error: result.error }, 400);
 
-    return c.json({ success: true, data: result.value });
+    return c.json({ success: true as const, data: result.value }, 200);
   },
 );
 
+// --- Get My Challenges ---
 challengeRoutes.openapi(
   createRoute({
     method: "get",
@@ -187,6 +189,10 @@ challengeRoutes.openapi(
         content: { "application/json": { schema: challengeListSchema } },
         description: "Your challenges",
       },
+      400: {
+        content: { "application/json": { schema: errorResponse } },
+        description: "Bad request",
+      },
     },
   }),
   async (c) => {
@@ -196,7 +202,7 @@ challengeRoutes.openapi(
     const result = await getUserChallenges.execute({ userId, limit, offset });
     if (!result.success) return c.json({ success: false as const, error: result.error }, 400);
 
-    return c.json({ success: true as const, data: result.value });
+    return c.json({ success: true as const, data: result.value }, 200);
   },
 );
 

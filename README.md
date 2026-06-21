@@ -1,54 +1,198 @@
-# PotLockNg (Working Title)
+# PotLockNg API
 
-**The Decentralized Wagering & Escrow Engine for the Nigerian Content Creator Economy.**
+The backend API for PotLockNg — a decentralized wagering and escrow engine for the Nigerian content creator economy.
 
-PotLockNg is a high-trust social wagering platform designed to act as a neutral "digital judge." It allows TikTok streamers, iMessage gamers, and tournament organizers to create secure "Challenge Vaults" where participants lock in wagers and sponsors boost prize pools. By moving funds into a secure escrow, PotLockNg eliminates "trust-based" payment issues and professionalizes social betting.
-
-## The Vision
-To provide the financial infrastructure for the booming Nigerian entertainment sector, allowing creators to monetize their skills and engagement through high-stakes, spectator-friendly wagering.
+PotLockNg lets TikTok streamers, iMessage gamers, and tournament organizers create secure "Challenge Vaults" where participants lock in wagers and sponsors boost prize pools. Funds move into escrow, eliminating trust-based payment issues.
 
 ## Tech Stack
-- **Frontend:** Next.js (App Router), Tailwind CSS, Framer Motion.
-- **Backend:** Node.js (Hono/Fastify) or Laravel.
-- **Database:** PostgreSQL with Drizzle ORM.
-- **Payments:** Paystack / Flutterwave Integration.
-- **Real-time:** Pusher (for live pot updates and join notifications).
-- **Auth:** Better Auth or NextAuth.js.
 
-## System Architecture
+- **Runtime:** Bun
+- **Framework:** Hono (OpenAPI via `@hono/zod-openapi`)
+- **Database:** PostgreSQL + Drizzle ORM
+- **Cache:** Redis (via ioredis)
+- **Auth:** JWT (jose) + Google OAuth
+- **Payments:** Paystack
+- **Real-time:** Pusher
+- **File Storage:** Cloudinary
+- **Docs:** Scalar API Reference
+- **Validation:** Zod
 
-### 1. The Challenge Vault
-The core unit of the application. A vault governs the lifecycle of a single wager:
-- **Creation:** Host sets wager amount and rules.
-- **Funding:** Participants and Sponsors deposit NGN into the vault.
-- **Lock State:** Funds are frozen once the match requirements are met.
-- **Settlement:** Funds are disbursed based on participant consensus or dispute resolution.
+## Project Structure
 
-### 2. Revenue Model (Passive Income)
-The platform operates on a **Fee-on-Settlement** logic:
-- **Standard Wagers:** 3% platform fee on the total pot.
-- **Sponsored Events:** 5% platform fee on sponsorship injections.
-- **Withdrawal:** Flat ₦50 processing fee per payout.
+```
+src/
+├── api/                  # HTTP layer
+│   ├── middleware/        # Auth, rate limiting, error handling, sanitization
+│   ├── routes/           # Route definitions (OpenAPI)
+│   ├── schemas/          # Zod request/response schemas
+│   └── validators/       # Input validators
+├── application/          # Use cases
+│   ├── auth/             # Register, Login, Google OAuth
+│   ├── bet/              # Betting logic
+│   ├── challenge/        # Challenge lifecycle
+│   ├── games/            # Game management
+│   ├── kyc/              # KYC verification
+│   ├── tournament/       # Tournament brackets
+│   ├── user/             # Profile management
+│   └── wallet/           # Funding, withdrawals
+├── config/               # Environment validation
+├── domain/               # Domain models, interfaces, value objects
+│   ├── challenge/
+│   ├── shared/           # Result type, Money, DomainError
+│   ├── user/
+│   └── wallet/
+└── infrastructure/       # External services
+    ├── auth/             # TokenService, GoogleOAuthService
+    ├── cache/            # Redis client
+    ├── db/               # Drizzle schema, migrations, repositories
+    ├── logger/           # Pino logger
+    ├── payment/          # Paystack integration
+    ├── realtime/         # Pusher
+    └── storage/          # Cloudinary
+```
 
-## Features & Roadmap
+## Getting Started
 
-### Phase 1: MVP (Current)
-- [ ] **One-Click Challenge Links:** Shareable URLs for social media bios.
-- [ ] **Escrow Wallet:** Deposit/Withdrawal system via Paystack.
-- [ ] **Sponsorship Tier:** Public "Boost" button for external funding.
-- [ ] **Manual Reporting:** Simple "Winner/Loser" consensus button for participants.
+### Prerequisites
 
-### Phase 2: Reputation & Scaling
-- [ ] **Reputation Score:** Users gain "Trust Points" for honest reporting.
-- [ ] **Dispute Jury:** Community-led resolution for conflicted results.
-- [ ] **Brand Dashboard:** Analytics for sponsors to track their ROI and impressions.
+- [Bun](https://bun.sh) v1+
+- [Docker](https://docs.docker.com/get-docker/) & Docker Compose
 
-### Phase 3: Automation
-- [ ] **AI Screenshot Verification:** Automated winner detection via OCR.
-- [ ] **API Integrations:** Direct hooks for popular gaming platforms.
+### Setup
 
-## Installation & Setup
+```bash
+git clone https://github.com/Olayiwolaaa/potlockng-api.git
+cd potlockng-api
+bun install
+cp .env.example .env
+# Fill in your actual values in .env
+docker compose up postgres redis -d
+bun run db:push
+bun run dev
+```
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/Olayiwolaaa/potlockng-api.git
+The API runs at `http://localhost:3000`.
+
+### Docker (Full Stack)
+
+```bash
+docker compose up -d
+docker compose logs -f api
+docker compose down
+```
+
+## Environment Variables
+
+Copy `.env.example` and fill in values:
+
+| Variable | Description |
+|---|---|
+| `APP_ENV` | `development`, `staging`, or `production` |
+| `PORT` | Server port (default: 3000) |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `JWT_SECRET` | Secret for signing JWTs (min 32 chars) |
+| `PAYSTACK_SECRET_KEY` | Paystack secret key |
+| `PAYSTACK_PUBLIC_KEY` | Paystack public key |
+| `PAYSTACK_WEBHOOK_SECRET` | Paystack webhook secret |
+| `PUSHER_APP_ID` | Pusher app ID |
+| `PUSHER_KEY` | Pusher key |
+| `PUSHER_SECRET` | Pusher secret |
+| `PUSHER_CLUSTER` | Pusher cluster (default: mt1) |
+| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name |
+| `CLOUDINARY_API_KEY` | Cloudinary API key |
+| `CLOUDINARY_API_SECRET` | Cloudinary API secret |
+| `REDIS_URL` | Redis connection URL |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
+
+## API Endpoints
+
+### Auth
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/v1/auth/register` | Create account (email + password) |
+| `POST` | `/api/v1/auth/login` | Login with email + password |
+| `POST` | `/api/v1/auth/google` | Sign in with Google (ID token) |
+
+### Users
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/users/me` | Get current user profile |
+| `PATCH` | `/api/v1/users/me` | Update profile (name, avatar) |
+
+### Wallet
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/wallet/balance` | Get wallet balance |
+| `GET` | `/api/v1/wallet/transactions` | Transaction history |
+| `POST` | `/api/v1/wallet/fund` | Initialize Paystack payment |
+| `POST` | `/api/v1/wallet/withdraw` | Withdraw to bank account |
+
+### Challenges
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/v1/challenges` | Create a challenge |
+| `GET` | `/api/v1/challenges/c/:slug` | Get challenge by link |
+| `POST` | `/api/v1/challenges/c/:slug/join` | Join a challenge |
+| `POST` | `/api/v1/challenges/:id/declare` | Declare winner |
+| `GET` | `/api/v1/challenges/my` | List your challenges |
+
+### Bets
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/v1/bets` | Create a bet |
+| `GET` | `/api/v1/bets/:betId` | Get bet details |
+| `POST` | `/api/v1/bets/:betId/enter` | Enter a bet |
+| `POST` | `/api/v1/bets/:betId/settle` | Settle a bet |
+
+### Tournaments
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/v1/tournaments` | Create tournament |
+| `GET` | `/api/v1/tournaments/:id` | Get bracket + matches |
+| `POST` | `/api/v1/tournaments/:id/matches/:matchId/result` | Submit match result |
+| `PATCH` | `/api/v1/tournaments/:id/status` | Update tournament status |
+
+### KYC
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/kyc/status` | Get KYC tier + limits |
+| `POST` | `/api/v1/kyc/bvn` | Submit BVN verification |
+
+### Other
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/webhooks/paystack` | Paystack webhook handler |
+| `GET` | `/health` | Health check |
+| `GET` | `/docs` | Scalar API docs (non-production) |
+
+## Scripts
+
+```bash
+bun run dev          # Start dev server with hot reload
+bun run start        # Start production server
+bun run build        # Build for production
+bun test             # Run tests
+bun run db:generate  # Generate Drizzle migrations
+bun run db:migrate   # Run migrations
+bun run db:push      # Push schema directly (dev)
+bun run db:studio    # Open Drizzle Studio
+```
+
+## Revenue Model
+
+- **Standard Wagers:** 3% platform fee on settlement
+- **Sponsored Events:** 5% fee on sponsorship injections
+- **Withdrawals:** Flat ₦50 processing fee per payout
+
+## License
+
+Private — all rights reserved.

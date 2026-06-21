@@ -8,7 +8,6 @@ import { CacheKeys, CacheTTL } from "@infrastructure/cache/CacheKeys";
 import { db } from "@infrastructure/db/client";
 import { users } from "@infrastructure/db/schema";
 import { eq } from "drizzle-orm";
-import { NotFoundError } from "@domain/shared/DomainError";
 import { errorResponse } from "@api/schemas/common.schemas";
 import type { AppEnv } from "@api/types";
 
@@ -44,6 +43,10 @@ userRoutes.openapi(
         content: { "application/json": { schema: profileSchema } },
         description: "Your profile",
       },
+      404: {
+        content: { "application/json": { schema: errorResponse } },
+        description: "User not found",
+      },
     },
   }),
   async (c) => {
@@ -62,7 +65,9 @@ userRoutes.openapi(
       CacheTTL.USER_PROFILE,
     );
 
-    if (!profile) throw new NotFoundError("User");
+    if (!profile) {
+      return c.json({ success: false as const, error: "User not found" }, 404);
+    }
 
     return c.json({
       success: true as const,
@@ -74,7 +79,7 @@ userRoutes.openapi(
         profileImageUrl: profile.profileImageUrl,
         isVerified: profile.isVerified,
       },
-    });
+    }, 200);
   },
 );
 
@@ -148,7 +153,7 @@ userRoutes.openapi(
       return c.json({ success: false as const, error: result.error }, 400);
     }
 
-    return c.json({ success: true as const, data: result.value });
+    return c.json({ success: true as const, data: result.value }, 200);
   },
 );
 

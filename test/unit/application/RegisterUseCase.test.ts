@@ -69,7 +69,7 @@ describe("RegisterUseCase", () => {
     await useCase.execute(validInput);
     const result = await useCase.execute({
       ...validInput,
-      email: "test@test.com",
+      email: "different@test.com",
     });
     expect(result.success).toBe(false);
   });
@@ -90,7 +90,7 @@ describe("RegisterUseCase", () => {
   it("normalises email to lowercase", async () => {
     const result = await useCase.execute({
       ...validInput,
-      email: "test@test.COM",
+      email: "test@TEST.COM",
     });
     if (!result.success) throw new Error("Expected success");
 

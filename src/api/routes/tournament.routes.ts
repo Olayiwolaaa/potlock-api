@@ -11,7 +11,6 @@ import {
   tournamentParticipants,
 } from "@infrastructure/db/schema";
 import { eq, asc } from "drizzle-orm";
-import { NotFoundError } from "@domain/shared/DomainError";
 import {
   createTournamentBodySchema,
   createTournamentResponseSchema,
@@ -78,12 +77,10 @@ tournamentRoutes.openapi(
     });
 
     if (!result.success) {
-      const status =
-        result.error.includes("creator") ? 403 : 400;
-      return c.json(
-        { success: false as const, error: result.error },
-        status as 400 | 403,
-      );
+      if (result.error.includes("creator")) {
+        return c.json({ success: false as const, error: result.error }, 403);
+      }
+      return c.json({ success: false as const, error: result.error }, 400);
     }
 
     return c.json({ success: true as const, data: result.value }, 201);
@@ -129,9 +126,10 @@ tournamentRoutes.openapi(
       .where(eq(tournaments.id, tournamentId))
       .limit(1);
 
-    if (!tournament[0]) throw new NotFoundError("Tournament");
+    if (!tournament[0]) {
+      return c.json({ success: false as const, error: "Tournament not found" }, 404);
+    }
 
-    // Fetch all matches and participants for this tournament
     const [matches, participants] = await Promise.all([
       db
         .select()
@@ -144,10 +142,8 @@ tournamentRoutes.openapi(
         .where(eq(tournamentParticipants.tournamentId, tournamentId)),
     ]);
 
-    // Build name lookup map
     const nameMap = new Map(participants.map((p) => [p.id, p.displayName]));
 
-    // Group matches by round
     const roundMap = new Map<number, typeof matches>();
     for (const match of matches) {
       const existing = roundMap.get(match.round) ?? [];
@@ -182,7 +178,7 @@ tournamentRoutes.openapi(
         bracketType: tournament[0].bracketType,
         rounds,
       },
-    });
+    }, 200);
   },
 );
 
@@ -238,19 +234,17 @@ tournamentRoutes.openapi(
     });
 
     if (!result.success) {
-      const status = result.error.includes("creator") ? 403 : 400;
-      return c.json(
-        { success: false as const, error: result.error },
-        status as 400 | 403,
-      );
+      if (result.error.includes("creator")) {
+        return c.json({ success: false as const, error: result.error }, 403);
+      }
+      return c.json({ success: false as const, error: result.error }, 400);
     }
 
-    return c.json({ success: true as const, data: result.value });
+    return c.json({ success: true as const, data: result.value }, 200);
   },
 );
 
 // ── PATCH /tournaments/:tournamentId/status ───────────────────────────────────
-// Lets the creator manually mark a tournament as ACTIVE or COMPLETED
 tournamentRoutes.openapi(
   createRoute({
     method: "patch",
@@ -289,6 +283,10 @@ tournamentRoutes.openapi(
         content: { "application/json": { schema: errorResponse } },
         description: "Not the challenge creator",
       },
+      404: {
+        content: { "application/json": { schema: errorResponse } },
+        description: "Tournament not found",
+      },
     },
   }),
   async (c) => {
@@ -302,9 +300,10 @@ tournamentRoutes.openapi(
       .where(eq(tournaments.id, tournamentId))
       .limit(1);
 
-    if (!tournament[0]) throw new NotFoundError("Tournament");
+    if (!tournament[0]) {
+      return c.json({ success: false as const, error: "Tournament not found" }, 404);
+    }
 
-    // Verify requester is challenge creator
     const { challenges } = await import("@infrastructure/db/schema");
     const challenge = await db
       .select()
@@ -324,11 +323,10 @@ tournamentRoutes.openapi(
       .set({ status, updatedAt: new Date() })
       .where(eq(tournaments.id, tournamentId));
 
-    return c.json({ success: true as const, data: { status } });
+    return c.json({ success: true as const, data: { status } }, 200);
   },
 );
 
-// helper used in tournament response schema
 function successResponse<T extends z.ZodTypeAny>(schema: T) {
   return z.object({ success: z.literal(true), data: schema });
 }

@@ -5,9 +5,8 @@ import { logger } from "@infrastructure/logger/logger";
 export const errorHandler = () =>
   createMiddleware(async (c, next) => {
     try {
-      await next();
+      return await next();
     } catch (error) {
-      // Known domain errors — we control the message and status
       if (error instanceof DomainError) {
         return c.json(
           { success: false, error: error.message, code: error.code },
@@ -15,7 +14,6 @@ export const errorHandler = () =>
         );
       }
 
-      // Unknown errors — don't leak internals to the client
       logger.error({ error }, "Unhandled error");
       return c.json(
         { success: false, error: "Something went wrong", code: "INTERNAL_ERROR" },

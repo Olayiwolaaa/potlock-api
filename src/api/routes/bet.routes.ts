@@ -9,7 +9,6 @@ import type { AppEnv } from "@api/types";
 import { db } from "@infrastructure/db/client";
 import { challengeBets, betEntries } from "@infrastructure/db/schema";
 import { eq } from "drizzle-orm";
-import { NotFoundError } from "@domain/shared/DomainError";
 import {
   createBetBodySchema,
   placeBetEntryBodySchema,
@@ -83,11 +82,10 @@ betRoutes.openapi(
     });
 
     if (!result.success) {
-      const status = result.error.includes("creator") ? 403 : 400;
-      return c.json(
-        { success: false as const, error: result.error },
-        status as 400 | 403,
-      );
+      if (result.error.includes("creator")) {
+        return c.json({ success: false as const, error: result.error }, 403);
+      }
+      return c.json({ success: false as const, error: result.error }, 400);
     }
 
     return c.json({ success: true as const, data: result.value }, 201);
@@ -127,7 +125,9 @@ betRoutes.openapi(
       .where(eq(challengeBets.id, betId))
       .limit(1);
 
-    if (!bet[0]) throw new NotFoundError("Bet");
+    if (!bet[0]) {
+      return c.json({ success: false as const, error: "Bet not found" }, 404);
+    }
 
     const entries = await db
       .select()
@@ -148,7 +148,7 @@ betRoutes.openapi(
         noWinnerPolicy: bet[0].noWinnerPolicy,
         status: bet[0].status,
       },
-    });
+    }, 200);
   },
 );
 
@@ -184,7 +184,9 @@ betRoutes.openapi(
       .where(eq(challengeBets.challengeId, challengeId))
       .limit(1);
 
-    if (!bet[0]) throw new NotFoundError("Bet");
+    if (!bet[0]) {
+      return c.json({ success: false as const, error: "Bet not found" }, 404);
+    }
 
     const entries = await db
       .select()
@@ -205,7 +207,7 @@ betRoutes.openapi(
         noWinnerPolicy: bet[0].noWinnerPolicy,
         status: bet[0].status,
       },
-    });
+    }, 200);
   },
 );
 
@@ -251,13 +253,6 @@ betRoutes.openapi(
     if (!result.success) {
       return c.json({ success: false as const, error: result.error }, 400);
     }
-
-    // Fetch the saved entry to return full details
-    const entry = await db
-      .select()
-      .from(betEntries)
-      .where(eq(betEntries.id, result.value.entryId))
-      .limit(1);
 
     const bet = await db
       .select()
@@ -333,7 +328,9 @@ betRoutes.openapi(
       .where(eq(challengeBets.id, betId))
       .limit(1);
 
-    if (!bet[0]) throw new NotFoundError("Bet");
+    if (!bet[0]) {
+      return c.json({ success: false as const, error: "Bet not found" }, 404);
+    }
 
     const entries = await db
       .select()
@@ -352,7 +349,7 @@ betRoutes.openapi(
         })),
         total: entries.length,
       },
-    });
+    }, 200);
   },
 );
 
@@ -388,7 +385,7 @@ betRoutes.openapi(
         .select()
         .from(betEntries)
         .where(eq(betEntries.betId, betId))
-        .limit(100) // fetch all then filter — avoids compound where for now
+        .limit(100)
         .then((rows) => rows.find((r) => r.bettorId === bettorId)),
       db
         .select()
@@ -397,7 +394,9 @@ betRoutes.openapi(
         .limit(1),
     ]);
 
-    if (!entry) throw new NotFoundError("Bet entry");
+    if (!entry) {
+      return c.json({ success: false as const, error: "Bet entry not found" }, 404);
+    }
 
     return c.json({
       success: true as const,
@@ -408,7 +407,7 @@ betRoutes.openapi(
         status: entry.status,
         entryFeeKobo: Number(bet[0]?.entryFeeKobo ?? 0),
       },
-    });
+    }, 200);
   },
 );
 
@@ -456,18 +455,16 @@ betRoutes.openapi(
     });
 
     if (!result.success) {
-      const status = result.error.includes("creator") ? 403 : 400;
-      return c.json(
-        { success: false as const, error: result.error },
-        status as 400 | 403,
-      );
+      if (result.error.includes("creator")) {
+        return c.json({ success: false as const, error: result.error }, 403);
+      }
+      return c.json({ success: false as const, error: result.error }, 400);
     }
 
-    return c.json({ success: true as const, data: result.value });
+    return c.json({ success: true as const, data: result.value }, 200);
   },
 );
 
-// local helper — same shape as common.schemas to avoid import cycle
 function successResponse<T extends z.ZodTypeAny>(schema: T) {
   return z.object({ success: z.literal(true), data: schema });
 }

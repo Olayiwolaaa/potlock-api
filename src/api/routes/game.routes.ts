@@ -9,7 +9,6 @@ import { ReviewGameRequestUseCase } from "@application/games/ReviewGameRequestUs
 import { db } from "@infrastructure/db/client";
 import { gameRequests, games } from "@infrastructure/db/schema";
 import { eq } from "drizzle-orm";
-import { NotFoundError } from "@domain/shared/DomainError";
 import {
   listGamesResponseSchema,
   requestGameBodySchema,
@@ -39,11 +38,18 @@ gameRoutes.openapi(
         content: { "application/json": { schema: listGamesResponseSchema } },
         description: "Active games",
       },
+      500: {
+        content: { "application/json": { schema: errorResponse } },
+        description: "Internal error",
+      },
     },
   }),
   async (c) => {
     const result = await listGames.execute();
-    return c.json({ success: true as const, data: result.value });
+    if (!result.success) {
+      return c.json({ success: false as const, error: result.error }, 500);
+    }
+    return c.json({ success: true as const, data: result.value }, 200);
   },
 );
 
@@ -97,9 +103,8 @@ gameRoutes.openapi(
     },
   }),
   async (c) => {
-    // Apply auth + admin check inline on this route
-    await requireAuth(c, async () => {});
-    await requireAdmin(c, async () => {});
+    await requireAuth(c, async () => { });
+    await requireAdmin(c, async () => { });
 
     const formData = await c.req.formData();
     const name = formData.get("name") as string;
@@ -215,7 +220,7 @@ gameRoutes.openapi(
     },
   }),
   async (c) => {
-    await requireAdmin(c, async () => {});
+    await requireAdmin(c, async () => { });
 
     const { status } = c.req.valid("query");
 
@@ -235,7 +240,7 @@ gameRoutes.openapi(
         requestedById: r.requestedById,
         createdAt: r.createdAt.toISOString(),
       })),
-    });
+    }, 200);
   },
 );
 
@@ -272,7 +277,7 @@ gameRoutes.openapi(
     },
   }),
   async (c) => {
-    await requireAdmin(c, async () => {});
+    await requireAdmin(c, async () => { });
 
     const { requestId } = c.req.valid("param");
     const adminId = c.get("userId");
@@ -313,7 +318,7 @@ gameRoutes.openapi(
       return c.json({ success: false as const, error: result.error }, 400);
     }
 
-    return c.json({ success: true as const, data: {} });
+    return c.json({ success: true as const, data: {} }, 200);
   },
 );
 

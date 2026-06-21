@@ -54,7 +54,6 @@ kycRoutes.openapi(
     const tier = (profile[0]?.tier ?? "TIER_0") as KycTier;
     const dailyLimit = getDailyLimit(tier);
 
-    // Reset daily counter if it's a new calendar day
     const now = new Date();
     const resetAt = profile[0]?.dailyLimitResetAt ?? new Date(0);
     const isNewDay = now.toDateString() !== resetAt.toDateString();
@@ -80,7 +79,7 @@ kycRoutes.openapi(
         addressVerified: profile[0]?.addressStatus === "VERIFIED",
         nextTierRequirement: nextTierMap[tier],
       },
-    });
+    }, 200);
   },
 );
 
@@ -119,7 +118,6 @@ kycRoutes.openapi(
     const { bvn } = c.req.valid("json");
     const userId = c.get("userId");
 
-    // Check if already verified — don't call Paystack again unnecessarily
     const existing = await db
       .select()
       .from(kycProfiles)
@@ -139,7 +137,7 @@ kycRoutes.openapi(
       return c.json({ success: false as const, error: result.error }, 400);
     }
 
-    return c.json({ success: true as const, data: result.value });
+    return c.json({ success: true as const, data: result.value }, 200);
   },
 );
 
