@@ -5,39 +5,42 @@ export class User {
   private constructor(
     public readonly id: string,
     public readonly email: string,
-    public readonly phoneNumber: string,
-    public readonly passwordHash: string,
+    public readonly phoneNumber: string | null,
+    public readonly passwordHash: string | null,
     public readonly displayName: string,
     public readonly role: UserRole,
     public readonly isVerified: boolean,
     public readonly createdAt: Date,
     public readonly profileImageUrl: string | null,
     public readonly profileImagePublicId: string | null,
+    public readonly googleId: string | null,
   ) {}
 
   static create(params: {
     id: string;
     email: string;
-    phoneNumber: string;
-    passwordHash: string;
+    phoneNumber?: string | null;
+    passwordHash?: string | null;
     displayName: string;
     role?: UserRole;
     isVerified: boolean;
     createdAt: Date;
     profileImageUrl?: string | null;
     profileImagePublicId?: string | null;
+    googleId?: string | null;
   }): User {
     return new User(
       params.id,
       params.email,
-      params.phoneNumber,
-      params.passwordHash,
+      params.phoneNumber ?? null,
+      params.passwordHash ?? null,
       params.displayName,
       params.role ?? "user",
       params.isVerified,
       params.createdAt,
       params.profileImageUrl ?? null,
       params.profileImagePublicId ?? null,
+      params.googleId ?? null,
     );
   }
 
@@ -50,7 +53,6 @@ export class User {
     if (!trimmed.includes("@")) {
       return err("Invalid email format");
     }
-    // Return the normalized version in the Result value
     return ok(trimmed.toLowerCase());
   }
 
@@ -74,6 +76,7 @@ export class User {
       createdAt: this.createdAt,
       profileImageUrl: this.profileImageUrl,
       profileImagePublicId: this.profileImagePublicId,
+      googleId: this.googleId,
     };
   }
 }

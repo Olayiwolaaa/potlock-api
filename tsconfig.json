@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "skipLibCheck": true,
     "types": ["bun-types"],
     "target": "ESNext",
     "module": "ESNext",

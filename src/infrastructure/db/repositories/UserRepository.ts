@@ -14,6 +14,8 @@ export class UserRepository implements IUserRepository {
       displayName: record.displayName,
       isVerified: record.isVerified,
       createdAt: record.createdAt,
+      profileImageUrl: record.profileImageUrl,
+      googleId: record.googleId,
     });
   }
 
@@ -44,6 +46,15 @@ export class UserRepository implements IUserRepository {
     return result[0] ? this.toDomain(result[0]) : null;
   }
 
+  async findByGoogleId(googleId: string): Promise<User | null> {
+    const result = await db
+      .select()
+      .from(users)
+      .where(eq(users.googleId, googleId))
+      .limit(1);
+    return result[0] ? this.toDomain(result[0]) : null;
+  }
+
   async create(params: {
     id: string;
     email: string;
@@ -60,5 +71,38 @@ export class UserRepository implements IUserRepository {
     });
 
     return User.create({ ...params, isVerified: false, createdAt: now });
+  }
+
+  async createFromGoogle(params: {
+    id: string;
+    email: string;
+    displayName: string;
+    googleId: string;
+    profileImageUrl?: string | null;
+  }): Promise<User> {
+    const now = new Date();
+    await db.insert(users).values({
+      id: params.id,
+      email: params.email,
+      displayName: params.displayName,
+      googleId: params.googleId,
+      profileImageUrl: params.profileImageUrl ?? null,
+      isVerified: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    return User.create({
+      ...params,
+      isVerified: true,
+      createdAt: now,
+    });
+  }
+
+  async linkGoogleId(userId: string, googleId: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ googleId, updatedAt: new Date() })
+      .where(eq(users.id, userId));
   }
 }

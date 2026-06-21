@@ -23,7 +23,7 @@ export class LoginUseCase {
     // 1. Find user by email
     const user = await this.userRepo.findByEmail(input.email.toLowerCase().trim());
 
-    if (!user) return err("Invalid email or password");
+    if (!user || !user.passwordHash) return err("Invalid email or password");
 
     // 2. Verify password against stored hash
     const passwordValid = await Bun.password.verify(

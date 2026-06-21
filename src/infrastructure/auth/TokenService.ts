@@ -1,7 +1,7 @@
-import { SignJWT, jwtVerify } from "jose";
+import { SignJWT, jwtVerify, JWTPayload } from "jose";
 import { env } from "@config/env";
 
-export interface TokenPayload {
+export interface TokenPayload extends JWTPayload {
   userId: string;
   email: string;
 }
@@ -22,9 +22,8 @@ export class TokenService {
   async verify(token: string): Promise<TokenPayload | null> {
     try {
       const { payload } = await jwtVerify(token, secret);
-      return payload as unknown as TokenPayload;
+      return payload as TokenPayload;
     } catch {
-      // Expired, tampered, or malformed — all treated the same
       return null;
     }
   }

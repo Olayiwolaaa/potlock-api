@@ -15,7 +15,7 @@ export function buildUser(overrides: Partial<{
 }> = {}): User {
   return User.create({
     id: randomUUID(),
-    email: "test@example.com",
+    email: "test@test.com",
     phoneNumber: "+2348012345678",
     passwordHash: "hashed_password",
     displayName: "Test User",
@@ -117,11 +117,17 @@ export class MockUserRepository implements IUserRepository {
   private store = new Map<string, User>();
   private byEmail = new Map<string, string>();
   private byPhone = new Map<string, string>();
+  private byGoogleId = new Map<string, string>();
 
   seed(user: User): void {
     this.store.set(user.id, user);
     this.byEmail.set(user.email, user.id);
-    this.byPhone.set(user.phoneNumber, user.id);
+    if (user.phoneNumber) {
+      this.byPhone.set(user.phoneNumber, user.id);
+    }
+    if (user.googleId) {
+      this.byGoogleId.set(user.googleId, user.id);
+    }
   }
 
   async findById(id: string): Promise<User | null> {
@@ -138,6 +144,11 @@ export class MockUserRepository implements IUserRepository {
     return id ? (this.store.get(id) ?? null) : null;
   }
 
+  async findByGoogleId(googleId: string): Promise<User | null> {
+    const id = this.byGoogleId.get(googleId);
+    return id ? (this.store.get(id) ?? null) : null;
+  }
+
   async create(params: {
     id: string;
     email: string;
@@ -148,6 +159,29 @@ export class MockUserRepository implements IUserRepository {
     const user = User.create({ ...params, isVerified: false, createdAt: new Date() });
     this.seed(user);
     return user;
+  }
+
+  async createFromGoogle(params: {
+    id: string;
+    email: string;
+    displayName: string;
+    googleId: string;
+    profileImageUrl?: string | null;
+  }): Promise<User> {
+    const user = User.create({
+      ...params,
+      isVerified: true,
+      createdAt: new Date(),
+    });
+    this.seed(user);
+    return user;
+  }
+
+  async linkGoogleId(userId: string, googleId: string): Promise<void> {
+    const user = this.store.get(userId);
+    if (user) {
+      this.byGoogleId.set(googleId, userId);
+    }
   }
 }
 

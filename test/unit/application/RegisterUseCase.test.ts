@@ -19,10 +19,10 @@ describe("RegisterUseCase", () => {
   let useCase: RegisterUseCase;
 
   const validInput = {
-    email: "emeka@example.com",
+    email: "test@test.com",
     phoneNumber: "08012345678",
     password: "securepassword",
-    displayName: "Emeka Obi",
+    displayName: "Olayiwola Adio",
   };
 
   beforeEach(() => {
@@ -69,7 +69,7 @@ describe("RegisterUseCase", () => {
     await useCase.execute(validInput);
     const result = await useCase.execute({
       ...validInput,
-      email: "different@example.com",
+      email: "test@test.com",
     });
     expect(result.success).toBe(false);
   });
@@ -90,11 +90,11 @@ describe("RegisterUseCase", () => {
   it("normalises email to lowercase", async () => {
     const result = await useCase.execute({
       ...validInput,
-      email: "EMEKA@EXAMPLE.COM",
+      email: "test@test.COM",
     });
     if (!result.success) throw new Error("Expected success");
 
-    const user = await userRepo.findByEmail("emeka@example.com");
+    const user = await userRepo.findByEmail("test@test.com");
     expect(user).not.toBeNull();
   });
 });

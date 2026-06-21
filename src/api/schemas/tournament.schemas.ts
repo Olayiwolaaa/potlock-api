@@ -2,7 +2,7 @@ import { z } from "@hono/zod-openapi";
 import { successResponse, errorResponse } from "./common.schemas";
 
 const playerSchema = z.object({
-  displayName: z.string().min(1).max(50).openapi({ example: "Emeka" }),
+  displayName: z.string().min(1).max(50).openapi({ example: "Olayiwola" }),
   userId: z.string().uuid().optional().openapi({
     example: "550e8400-e29b-41d4-a716-446655440000",
     description: "Optional — link to a registered user",

@@ -1,21 +1,27 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { RegisterUseCase } from "@application/auth/RegisterUseCase";
 import { LoginUseCase } from "@application/auth/LoginUseCase";
+import { GoogleLoginUseCase } from "@application/auth/GoogleLoginUseCase";
 import { UserRepository } from "@infrastructure/db/repositories/UserRepository";
 import { WalletRepository } from "@infrastructure/db/repositories/WalletRepository";
 import { TokenService } from "@infrastructure/auth/TokenService";
+import { GoogleOAuthService } from "@infrastructure/auth/GoogleOAuthService";
 import {
   registerBodySchema,
   loginBodySchema,
+  googleLoginBodySchema,
   authResponseSchema,
+  googleAuthResponseSchema,
   errorResponse,
 } from "@api/schemas/auth.schemas";
 
 const userRepo = new UserRepository();
 const walletRepo = new WalletRepository();
 const tokenService = new TokenService();
+const googleOAuth = new GoogleOAuthService();
 const registerUseCase = new RegisterUseCase(userRepo, walletRepo, tokenService);
 const loginUseCase = new LoginUseCase(userRepo, tokenService);
+const googleLoginUseCase = new GoogleLoginUseCase(userRepo, walletRepo, tokenService, googleOAuth);
 
 const authRoutes = new OpenAPIHono();
 
@@ -89,6 +95,42 @@ authRoutes.openapi(loginRoute, async (c) => {
   }
 
   return c.json({ success: true, data: result.value }, 200);
+});
+
+// --- Google OAuth ---
+const googleLoginRoute = createRoute({
+  method: "post",
+  path: "/google",
+  tags: ["Auth"],
+  summary: "Sign in with Google",
+  description: "Authenticates using a Google ID token. Creates a new account if none exists.",
+  request: {
+    body: {
+      content: { "application/json": { schema: googleLoginBodySchema } },
+      required: true,
+    },
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: googleAuthResponseSchema } },
+      description: "Google authentication successful",
+    },
+    401: {
+      content: { "application/json": { schema: errorResponse } },
+      description: "Invalid Google token",
+    },
+  },
+});
+
+authRoutes.openapi(googleLoginRoute, async (c) => {
+  const { idToken } = c.req.valid("json");
+  const result = await googleLoginUseCase.execute(idToken);
+
+  if (!result.success) {
+    return c.json({ success: false as const, error: result.error }, 401);
+  }
+
+  return c.json({ success: true as const, data: result.value }, 200);
 });
 
 export { authRoutes };
