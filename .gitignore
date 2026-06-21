@@ -1,2 +1,38 @@
-# deps
+# Dependencies
 node_modules/
+
+# Build output
+dist/
+out/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Bun
+bun.lockb
+
+# Drizzle
+drizzle/meta
+
+# Test coverage
+coverage/
+
+# Temp files
+*.tmp
+*.bak

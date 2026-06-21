@@ -2,6 +2,7 @@
   "name": "potlockng-api",
   "scripts": {
     "dev": "bun run --watch src/main.ts",
+    "build": "bun build src/main.ts --outdir dist --minify",
     "start": "bun run src/main.ts",
     "test": "bun test",
     "db:generate": "drizzle-kit generate",
@@ -31,8 +32,9 @@
     "zod-openapi": "4"
   },
   "devDependencies": {
-    "@types/bun": "^1.3.13",
+    "@types/bun": "^1.3.14",
     "@types/ioredis": "^5.0.0",
+    "bun-types": "^1.3.14",
     "drizzle-kit": "^0.31.10",
     "typescript": "^6.0.3"
   }
