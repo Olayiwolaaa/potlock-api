@@ -32,7 +32,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: DockerFile
+      dockerfile: Dockerfile
     restart: unless-stopped
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
