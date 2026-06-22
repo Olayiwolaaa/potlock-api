@@ -40,32 +40,31 @@ export class JoinChallengeUseCase {
     const joinResult = challenge.join(input.opponentId);
     if (!joinResult.success) return err(joinResult.error.message);
 
-    // 3. Check opponent wallet
-    const wallet = await this.walletRepo.findByUserId(input.opponentId);
-    if (!wallet) return err("Wallet not found");
-
     const stake = Money.fromKobo(challenge.stakeKobo);
 
-    // 4. Debit opponent's wallet
-    const debitResult = wallet.debit(stake);
-    if (!debitResult.success) return err(debitResult.error.message);
+    // 3. Atomic debit — prevents double-spend if two opponents click join simultaneously
+    const wallet = await this.walletRepo.debitAtomic(
+      input.opponentId,
+      stake.kobo,
+    );
+    if (!wallet) {
+      return err("Insufficient wallet balance to join this challenge");
+    }
 
-    await this.walletRepo.save(wallet);
-
-    // 5. Save the updated challenge (now LOCKED with opponentId set)
+    // 4. Save the updated challenge (now LOCKED with opponentId set)
     await this.challengeRepo.save(challenge);
 
-    // 6. Update vault balance and lock it
+    // 5. Update vault balance and lock it
     await db
       .update(vaults)
       .set({
-        balanceKobo: challenge.potKobo, // now full pot (both stakes)
+        balanceKobo: challenge.potKobo,
         status: "LOCKED",
         updatedAt: new Date(),
       })
       .where(eq(vaults.challengeId, challenge.id));
 
-    // 7. Record transaction
+    // 6. Record transaction
     await db.insert(walletTransactions).values({
       id: randomUUID(),
       walletId: wallet.id,
@@ -80,7 +79,7 @@ export class JoinChallengeUseCase {
     await pusher.emitToMany(
       [
         Channels.challenge(challenge.id),
-        Channels.user(challenge.creatorId), // notify creator their challenge was accepted
+        Channels.user(challenge.creatorId),
       ],
       Events.CHALLENGE_JOINED,
       {
