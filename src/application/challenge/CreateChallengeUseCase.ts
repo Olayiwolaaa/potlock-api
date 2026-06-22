@@ -17,7 +17,7 @@ interface CreateChallengeInput {
   description?: string;
   stakeKobo: number;
   expiresInHours: number;
-  gameId?: string;                 // optional game category
+  gameId?: string;
   coverImageBuffer?: Buffer;
   coverImageMimeType?: string;
 }
@@ -40,30 +40,14 @@ export class CreateChallengeUseCase {
     input: CreateChallengeInput,
   ): Promise<Result<CreateChallengeOutput>> {
     // 1. Validate stake amount
-    const MIN_STAKE = Money.fromNaira(100); // ₦100 minimum
+    const MIN_STAKE = Money.fromNaira(100);
     const stake = Money.fromKobo(input.stakeKobo);
 
     if (stake.kobo < MIN_STAKE.kobo) {
       return err(`Minimum stake is ${MIN_STAKE.toString()}`);
     }
 
-    // 2. Check creator has enough balance
-    const wallet = await this.walletRepo.findByUserId(input.creatorId);
-    if (!wallet) return err("Wallet not found");
-
-    if (
-      !stake.isGreaterThan(Money.fromKobo(0)) ||
-      wallet.balance.kobo < stake.kobo
-    ) {
-      return err("Insufficient wallet balance to create this challenge");
-    }
-
-    // 3. Debit the creator's wallet immediately — funds go into escrow
-    const debitResult = wallet.debit(stake);
-    if (!debitResult.success) return err(debitResult.error.message);
-
-    await this.walletRepo.save(wallet);
-
+    // 2. Upload cover image before touching money (fail fast)
     let coverImageUrl: string | null = null;
     let coverImagePublicId: string | null = null;
 
@@ -77,7 +61,7 @@ export class CreateChallengeUseCase {
       const uploaded = await this.storage.uploadBuffer(
         input.coverImageBuffer,
         "potlockng/challenges",
-        { maxWidth: 1200, maxHeight: 630 }, // OG image ratio
+        { maxWidth: 1200, maxHeight: 630 },
       );
 
       if (!uploaded) return err("Cover image upload failed");
@@ -85,9 +69,18 @@ export class CreateChallengeUseCase {
       coverImagePublicId = uploaded.publicId;
     }
 
+    // 3. Atomic debit — prevents double-spend if user spams create
+    const wallet = await this.walletRepo.debitAtomic(
+      input.creatorId,
+      stake.kobo,
+    );
+    if (!wallet) {
+      return err("Insufficient wallet balance to create this challenge");
+    }
+
     // 4. Create the challenge
     const challengeId = randomUUID();
-    const linkSlug = nanoid(8); // short, URL-safe slug e.g. "V1StGXR8"
+    const linkSlug = nanoid(8);
     const expiresAt = new Date(
       Date.now() + input.expiresInHours * 60 * 60 * 1000,
     );
@@ -97,7 +90,7 @@ export class CreateChallengeUseCase {
       creatorId: input.creatorId,
       opponentId: null,
       stakeKobo: stake.kobo,
-      potKobo: stake.kobo, // just creator's stake for now, doubles when opponent joins
+      potKobo: stake.kobo,
       status: "OPEN",
       linkSlug,
       title: input.title.trim(),

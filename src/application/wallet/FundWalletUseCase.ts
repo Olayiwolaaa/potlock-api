@@ -3,6 +3,7 @@ import { Money } from "@domain/shared/Money";
 import { Result, ok, err } from "@domain/shared/Result";
 import { db } from "@infrastructure/db/client";
 import { walletTransactions } from "@infrastructure/db/schema";
+import { eq } from "drizzle-orm";
 import { logger } from "@infrastructure/logger/logger";
 import {
   pusher,
@@ -13,7 +14,7 @@ import {
 interface FundWalletInput {
   userId: string;
   amountKobo: number;
-  paystackReference: string; // the unique ref from Paystack
+  paystackReference: string;
 }
 
 interface FundWalletOutput {
@@ -27,20 +28,23 @@ export class FundWalletUseCase {
   async execute(input: FundWalletInput): Promise<Result<FundWalletOutput>> {
     const { userId, amountKobo, paystackReference } = input;
 
-    // 1. Find the user's wallet
-    const wallet = await this.walletRepo.findByUserId(userId);
+    // Idempotency: check if this reference was already processed
+    const existing = await db
+      .select()
+      .from(walletTransactions)
+      .where(eq(walletTransactions.reference, paystackReference))
+      .limit(1);
+
+    if (existing[0]) {
+      logger.info({ reference: paystackReference }, "Funding already processed, skipping");
+      return err("Payment already processed");
+    }
+
+    // Atomic credit — prevents double-credit race condition
+    const wallet = await this.walletRepo.creditAtomic(userId, amountKobo);
     if (!wallet) return err("Wallet not found for user");
 
-    const amount = Money.fromKobo(amountKobo);
-
-    // 2. Credit the wallet (business rule enforced by domain)
-    const creditResult = wallet.credit(amount);
-    if (!creditResult.success) return err(creditResult.error);
-
-    // 3. Persist the updated wallet balance
-    await this.walletRepo.save(wallet);
-
-    // 4. Record the transaction for audit trail
+    // Record the transaction for audit trail
     const txId = crypto.randomUUID();
     await db.insert(walletTransactions).values({
       id: txId,

@@ -15,8 +15,8 @@ import {
 
 interface SettleInput {
   challengeId: string;
-  declarerId: string; // who is submitting the result
-  winnerId: string; // who they say won
+  declarerId: string;
+  winnerId: string;
 }
 
 interface SettleOutput {
@@ -35,7 +35,6 @@ export class SettleChallengeUseCase {
     const challenge = await this.challengeRepo.findById(input.challengeId);
     if (!challenge) return err("Challenge not found");
 
-    // Domain enforces who can declare and validates the winner
     const declareResult = challenge.declareWinner(
       input.declarerId,
       input.winnerId,
@@ -44,19 +43,17 @@ export class SettleChallengeUseCase {
 
     const outcome = declareResult.value;
 
-    // Save the updated declaration state regardless of outcome
     await this.challengeRepo.save(challenge);
 
-    // Both declared the same winner — settle immediately
     if (outcome === "SETTLED") {
       const fees = FeeCalculator.calculateStandardPayout(challenge.potKobo);
 
-      // Credit winner's wallet
-      const winnerWallet = await this.walletRepo.findByUserId(input.winnerId);
+      // Atomic credit — prevents double-payout race condition
+      const winnerWallet = await this.walletRepo.creditAtomic(
+        input.winnerId,
+        fees.winnerPayout.kobo,
+      );
       if (!winnerWallet) return err("Winner wallet not found");
-
-      winnerWallet.credit(fees.winnerPayout);
-      await this.walletRepo.save(winnerWallet);
 
       // Release the vault
       await db
@@ -76,10 +73,10 @@ export class SettleChallengeUseCase {
         note: `Won challenge: ${challenge.title}`,
       });
 
-      // Record platform fee transaction (for accounting)
+      // Record platform fee transaction
       await db.insert(walletTransactions).values({
         id: randomUUID(),
-        walletId: winnerWallet.id, // placeholder — in prod this goes to a platform wallet
+        walletId: winnerWallet.id,
         amountKobo: fees.platformFee.kobo,
         type: "DEBIT",
         status: "SUCCESS",
@@ -88,13 +85,12 @@ export class SettleChallengeUseCase {
         note: `Platform fee for challenge: ${challenge.title}`,
       });
 
-      // After crediting winner and updating vault (in the SETTLED branch):
       await pusher.emitToMany(
         [
           Channels.challenge(challenge.id),
-          Channels.user(input.winnerId), // winner gets personal notification
+          Channels.user(input.winnerId),
           Channels.user(
-            input.winnerId === challenge.creatorId // notify the loser too
+            input.winnerId === challenge.creatorId
               ? challenge.opponentId!
               : challenge.creatorId,
           ),
@@ -121,7 +117,6 @@ export class SettleChallengeUseCase {
       });
     }
 
-    // Both declared different winners — freeze vault
     if (outcome === "DISPUTED") {
       await db
         .update(vaults)
@@ -143,7 +138,6 @@ export class SettleChallengeUseCase {
       return ok({ outcome: "DISPUTED" });
     }
 
-    // Only one person declared so far
     return ok({ outcome: "WAITING" });
   }
 }
