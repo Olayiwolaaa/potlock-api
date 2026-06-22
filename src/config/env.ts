@@ -19,7 +19,8 @@ const envSchema = z.object({
   CLOUDINARY_API_SECRET: z.string(),
   REDIS_URL: z.url(),
   GOOGLE_CLIENT_ID: z.string(),
-  GOOGLE_CLIENT_SECRET: z.string()
+  GOOGLE_CLIENT_SECRET: z.string(),
+  FRONTEND_URL: z.url().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

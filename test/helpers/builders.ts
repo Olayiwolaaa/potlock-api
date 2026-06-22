@@ -82,6 +82,7 @@ export function buildChallenge(overrides: Partial<{
 import { IWalletRepository } from "@domain/wallet/IWalletRepository";
 import { IUserRepository } from "@domain/user/IUserRepository";
 import { IChallengeRepository } from "@domain/challenge/IChallengeRepository";
+import { Money } from "@src/domain/shared/Money";
 
 export class MockWalletRepository implements IWalletRepository {
   private store = new Map<string, Wallet>();          // id → wallet
@@ -111,6 +112,23 @@ export class MockWalletRepository implements IWalletRepository {
     this.seed(wallet);
     return wallet;
   }
+
+  async debitAtomic(userId: string, amountKobo: number): Promise<Wallet | null> {
+    const wallet = await this.findByUserId(userId);
+    if (!wallet || wallet.balance.kobo < amountKobo) return null;
+    wallet.debit(Money.fromKobo(amountKobo));
+    await this.save(wallet);
+    return wallet;
+  }
+
+  async creditAtomic(userId: string, amountKobo: number): Promise<Wallet | null> {
+    const wallet = await this.findByUserId(userId);
+    if (!wallet) return null;
+    wallet.credit(Money.fromKobo(amountKobo));
+    await this.save(wallet);
+    return wallet;
+  }
+
 }
 
 export class MockUserRepository implements IUserRepository {

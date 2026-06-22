@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import { env } from "@config/env";
 import { PaystackAdapter } from "@infrastructure/payment/PaystackAdapter";
 import { WalletRepository } from "@infrastructure/db/repositories/WalletRepository";
@@ -13,35 +13,48 @@ import { eq } from "drizzle-orm";
 const webhookRoutes = new Hono();
 const paystack = new PaystackAdapter();
 const walletRepo = new WalletRepository();
-const userRepo = new UserRepository();
 const fundWallet = new FundWalletUseCase(walletRepo);
 
 webhookRoutes.post("/paystack", async (c) => {
   logger.info("Incoming Paystack webhook");
   const signature = c.req.header("x-paystack-signature");
+  if (!signature) {
+    logger.warn("Rejected webhook: missing signature header");
+    return c.json({ error: "Missing signature" }, 401);
+  }
+
   const rawBody = await c.req.text();
 
   const expectedSig = createHmac("sha512", env.PAYSTACK_WEBHOOK_SECRET)
     .update(rawBody)
     .digest("hex");
 
-  // TEMP DEBUG — remove after fixing
-  logger.info({
-    receivedSig: signature,
-    expectedSig,
-    secret: env.PAYSTACK_WEBHOOK_SECRET,
-    match: signature === expectedSig,
-  }, "Webhook signature debug");
+  // signature header is attacker-controlled — guard against non-hex input
+  // throwing inside Buffer.from before we get a chance to reject it cleanly.
+  let sigBuffer: Buffer;
+  try {
+    sigBuffer = Buffer.from(signature, "hex");
+  } catch {
+    logger.warn("Rejected webhook: malformed signature header");
+    return c.json({ error: "Invalid signature" }, 401);
+  }
+  const expectedBuffer = Buffer.from(expectedSig, "hex");
 
-  if (signature !== expectedSig) {
+  if (sigBuffer.length !== expectedBuffer.length || !timingSafeEqual(sigBuffer, expectedBuffer)) {
     logger.warn("Rejected webhook: invalid signature");
     return c.json({ error: "Invalid signature" }, 401);
   }
 
-  const event = JSON.parse(rawBody);
+  let event: any;
+  try {
+    event = JSON.parse(rawBody);
+  } catch {
+    logger.warn("Rejected webhook: malformed JSON body");
+    return c.json({ error: "Invalid payload" }, 400);
+  }
+
   logger.info({ event: event.event }, "Paystack webhook received");
 
-  // 2. Route to the right handler
   switch (event.event) {
     case "charge.success":
       await handleChargeSuccess(event.data);
@@ -115,18 +128,82 @@ async function handleTransferSuccess(data: { reference: string }) {
 }
 
 async function handleTransferFailed(data: { reference: string; amount: number }) {
-  // Transfer failed after we already debited the wallet — we need to refund
-  // In production this would trigger a careful reconciliation process
-  // For now we log it clearly so you can handle it manually
-  logger.error(
-    { reference: data.reference, amount: data.amount },
-    "CRITICAL: Transfer failed — manual reconciliation required",
-  );
+  const { reference } = data;
 
+  const [original] = await db
+    .select()
+    .from(walletTransactions)
+    .where(eq(walletTransactions.reference, reference))
+    .limit(1);
+
+  if (!original) {
+    logger.error(
+      { reference, amount: data.amount },
+      "CRITICAL: Transfer failed but no matching transaction found — manual reconciliation required",
+    );
+    return;
+  }
+
+  if (original.status === "FAILED") {
+    logger.info({ reference }, "Transfer failure already reconciled, skipping");
+    return;
+  }
+
+  // Guard against double-refund
+  const refundReference = `refund_${reference}`;
+  const existingRefund = await db
+    .select()
+    .from(walletTransactions)
+    .where(eq(walletTransactions.reference, refundReference))
+    .limit(1);
+
+  if (existingRefund[0]) {
+    logger.info({ reference, refundReference }, "Refund already issued, skipping");
+    return;
+  }
+
+  // Look up the wallet to get the userId (we only have walletId from the transaction)
+  const wallet = await walletRepo.findById(original.walletId);
+  if (!wallet) {
+    logger.error(
+      { reference, walletId: original.walletId },
+      "CRITICAL: Wallet not found for refund — manual reconciliation required",
+    );
+    return;
+  }
+
+  // Atomically credit the user's wallet
+  const refunded = await walletRepo.creditAtomic(wallet.userId, original.amountKobo);
+  if (!refunded) {
+    logger.error(
+      { reference, userId: wallet.userId },
+      "CRITICAL: Refund credit failed — manual reconciliation required",
+    );
+    return;
+  }
+
+  // Record the refund transaction
+  await db.insert(walletTransactions).values({
+    id: crypto.randomUUID(),
+    walletId: original.walletId,
+    amountKobo: original.amountKobo,
+    type: "CREDIT",
+    status: "SUCCESS",
+    purpose: "WITHDRAWAL",
+    reference: refundReference,
+    note: `Auto-refund for failed transfer: ${reference}`,
+  });
+
+  // Mark the original withdrawal as failed
   await db
     .update(walletTransactions)
     .set({ status: "FAILED" })
-    .where(eq(walletTransactions.reference, data.reference));
+    .where(eq(walletTransactions.reference, reference));
+
+  logger.warn(
+    { reference, refundReference, userId: wallet.userId, amountKobo: original.amountKobo },
+    "Transfer failed — wallet automatically refunded",
+  );
 }
 
 export { webhookRoutes };

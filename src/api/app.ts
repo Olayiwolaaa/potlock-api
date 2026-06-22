@@ -32,8 +32,15 @@ export function createApp() {
   app.use(
     "*",
     cors({
-      origin: env.APP_ENV === "production" ? "https://potlockng.com" : "*",
+      origin:
+        env.APP_ENV === "production"
+          ? env.FRONTEND_URL
+            ? [env.FRONTEND_URL]
+            : ["https://potlockng.com", "https://www.potlockng.com"]
+          : "*",
       allowHeaders: ["Content-Type", "Authorization"],
+      allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+      maxAge: 86400,
     }),
   );
   app.use("*", sanitizeBody);
