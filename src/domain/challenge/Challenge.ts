@@ -13,6 +13,7 @@ interface ChallengeProps {
   id: string;
   creatorId: string;
   opponentId: string | null;
+  platform: "PS" | "XBOX" | "MOBILE" | "PC";
   stakeKobo: number;
   potKobo: number;
   status: ChallengeStatus;
@@ -36,6 +37,7 @@ export class Challenge {
   get id() { return this.props.id; }
   get creatorId() { return this.props.creatorId; }
   get opponentId() { return this.props.opponentId; }
+  get platform() { return this.props.platform; }
   get status() { return this.props.status; }
   get linkSlug() { return this.props.linkSlug; }
   get title() { return this.props.title; }

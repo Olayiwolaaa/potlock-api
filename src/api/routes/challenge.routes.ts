@@ -16,6 +16,7 @@ import { successResponse, errorResponse } from "@api/schemas/common.schemas";
 import { GetUserChallengesUseCase } from "@application/challenge/GetUserChallengesUseCase";
 import { challengeListSchema } from "@api/schemas/challenge.schemas";
 import { paginationQuery } from "@api/schemas/wallet.schemas";
+import { platform } from "os";
 
 const getUserChallenges = new GetUserChallengesUseCase();
 const challengeRepo = new ChallengeRepository();
@@ -97,6 +98,7 @@ challengeRoutes.openapi(
       data: {
         id: challenge.id,
         title: challenge.title,
+        platform: challenge.platform,
         stakeKobo: challenge.stakeKobo,
         status: challenge.status,
         creatorId: challenge.creatorId,

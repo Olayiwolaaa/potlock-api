@@ -69,7 +69,7 @@ gameRoutes.openapi(
             schema: z.object({
               name: z.string().min(2).max(80),
               description: z.string().max(300).optional(),
-              image: z.instanceof(File),
+              image: z.string().openapi({ type: "string", format: "binary", description: "Game image file" }),
             }),
           },
         },

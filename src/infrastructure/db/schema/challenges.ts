@@ -18,6 +18,13 @@ export const challengeStatusEnum = pgEnum("challenge_status", [
   "CANCELLED",
 ]);
 
+export const platformEnum = pgEnum("platform", [
+  "PS",
+  "XBOX",
+  "MOBILE",
+  "PC",
+]);
+
 export const challenges = pgTable("challenges", {
   id: uuid("id").primaryKey().defaultRandom(),
   creatorId: uuid("creator_id")
@@ -25,6 +32,7 @@ export const challenges = pgTable("challenges", {
     .references(() => users.id),
   opponentId: uuid("opponent_id").references(() => users.id),
   gameId: uuid("game_id").references(() => games.id),
+  platform: platformEnum("platform").notNull(),
   coverImageUrl: text("cover_image_url"),
   coverImagePublicId: text("cover_image_public_id"),
   stakeKobo: bigint("stake_kobo", { mode: "number" }).notNull(),

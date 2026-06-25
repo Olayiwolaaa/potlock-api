@@ -46,6 +46,7 @@ export function buildChallenge(overrides: Partial<{
   id: string;
   creatorId: string;
   opponentId: string | null;
+  platform: "PS" | "XBOX" | "MOBILE" | "PC";
   stakeKobo: number;
   potKobo: number;
   status: "OPEN" | "LOCKED" | "SETTLED" | "DISPUTED" | "CANCELLED";
@@ -61,6 +62,7 @@ export function buildChallenge(overrides: Partial<{
     id: randomUUID(),
     creatorId: randomUUID(),
     opponentId: null,
+    platform: "PS",
     stakeKobo: 500_000,
     potKobo: 500_000,
     status: "OPEN",

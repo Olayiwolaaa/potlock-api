@@ -12,6 +12,7 @@ interface GetUserChallengesInput {
 export interface ChallengeListItem {
   id: string;
   title: string;
+  platform: "PS" | "XBOX" | "MOBILE" | "PC";
   stakeKobo: number;
   potKobo: number;
   status: string;
@@ -53,11 +54,11 @@ export class GetUserChallengesUseCase {
       challenges: rows.map((row) => ({
         id: row.id,
         title: row.title,
+        platform: row.platform,
         stakeKobo: Number(row.stakeKobo),
         potKobo: Number(row.potKobo),
         status: row.status,
         linkSlug: row.linkSlug,
-        // Tell the user which side they're on
         role: row.creatorId === input.userId ? "CREATOR" : "OPPONENT",
         creatorId: row.creatorId,
         opponentId: row.opponentId,

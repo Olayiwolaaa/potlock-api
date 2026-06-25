@@ -89,6 +89,7 @@ export class CreateChallengeUseCase {
       id: challengeId,
       creatorId: input.creatorId,
       opponentId: null,
+      platform: "MOBILE",
       stakeKobo: stake.kobo,
       potKobo: stake.kobo,
       status: "OPEN",
