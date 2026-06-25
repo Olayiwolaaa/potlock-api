@@ -99,7 +99,11 @@ userRoutes.openapi(
           "multipart/form-data": {
             schema: z.object({
               displayName: z.string().min(2).max(30).optional(),
-              image: z.instanceof(File).optional(),
+              image: z.string().optional().openapi({
+                type: "string",
+                format: "binary",
+                description: "Profile image file",
+              }),
             }),
           },
         },

@@ -3,7 +3,7 @@ import { successResponse, errorResponse } from "./common.schemas";
 
 export const registerBodySchema = z
   .object({
-    email: z.email().openapi({ example: "test@test.com" }),
+    email: z.email(),
     phoneNumber: z.string().min(10).openapi({ example: "08012345678" }),
     password: z.string().min(8).openapi({ example: "securepassword123" }),
     displayName: z.string().min(2).max(30).openapi({ example: "Olayiwola Adio" }),

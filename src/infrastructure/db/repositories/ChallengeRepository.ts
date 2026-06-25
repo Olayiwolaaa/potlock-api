@@ -12,6 +12,7 @@ export class ChallengeRepository implements IChallengeRepository {
       id: record.id,
       creatorId: record.creatorId,
       opponentId: record.opponentId,
+      platform: record.platform as "PS" | "XBOX" | "MOBILE" | "PC",
       stakeKobo: Number(record.stakeKobo),
       potKobo: Number(record.potKobo),
       status: record.status as ChallengeStatus,

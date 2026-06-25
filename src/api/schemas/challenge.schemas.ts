@@ -35,6 +35,7 @@ export const challengeListSchema = successResponse(
       z.object({
         id: z.string(),
         title: z.string(),
+        platform: z.enum(["PS", "XBOX", "MOBILE", "PC"]),
         stakeKobo: z.number(),
         potKobo: z.number(),
         status: z.string(),
