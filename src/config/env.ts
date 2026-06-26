@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const envSchema = z.object({
+  APP_URL: z.url().default("http://localhost:3000"),
   APP_ENV: z
     .enum(["development", "staging", "production"])
     .default("development"),
