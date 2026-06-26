@@ -34,9 +34,7 @@ export function createApp() {
     cors({
       origin:
         env.APP_ENV === "production"
-          ? env.FRONTEND_URL
-            ? [env.FRONTEND_URL]
-            : ["https://potlockng.com", "https://www.potlockng.com"]
+          ? ["https://potlock.vercel.app"]
           : "*",
       allowHeaders: ["Content-Type", "Authorization"],
       allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
@@ -71,7 +69,7 @@ export function createApp() {
   app.route("/pusher", pusherRoutes);
 
   // ── Docs (non-production only) ────────────────────────────
-  if (env.APP_ENV !== "production") {
+  // if (env.APP_ENV !== "production") {
     app.openAPIRegistry.registerComponent("securitySchemes", "bearerAuth", {
       type: "http",
       scheme: "bearer",
@@ -87,7 +85,7 @@ export function createApp() {
         description:
           "Social wagering escrow engine for the Nigerian creator economy",
       },
-      servers: [{ url: `http://localhost:${env.PORT}`, description: "Local" }],
+      servers: [{ url: `${env.APP_URL}`, description: "Local" }],
       tags: [
         { name: "Auth", description: "Registration and login" },
         { name: "Wallet", description: "Funding, withdrawals, history" },
@@ -96,7 +94,7 @@ export function createApp() {
     });
 
     app.get("/docs", Scalar({ theme: "saturn", url: "/openapi.json" }));
-  }
+  // }
 
   app.notFound((c) =>
     c.json({ success: false as const, error: "Route not found" }, 404),
