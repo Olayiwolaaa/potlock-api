@@ -6,6 +6,11 @@ const envSchema = z.object({
     .enum(["development", "staging", "production"])
     .default("development"),
   PORT: z.coerce.number().default(3000),
+  CORS_ALLOWED_ORIGINS: z.string().default("http://localhost:3001,https://potlock.vercel.app"),
+  CORS_ALLOWED_METHODS: z.string().default("GET, POST, PUT, DELETE, OPTIONS"),
+  CORS_ALLOWED_HEADERS: z.string().default("Content - Type, Authorization"),
+  CORS_ALLOW_CREDENTIALS: z.boolean().default(true),
+  CORS_MAX_AGE: z.coerce.number().default(86400),
   DATABASE_URL: z.url(),
   JWT_SECRET: z.string().min(32),
   PAYSTACK_BASE_URL: z.url().default("https://api.paystack.co"),
