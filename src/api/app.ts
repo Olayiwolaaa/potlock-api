@@ -32,15 +32,20 @@ export function createApp() {
   app.use(
     "*",
     cors({
-      origin:
-        env.APP_ENV === "production"
-          ? ["https://potlock.vercel.app"]
-          : "*",
-      allowHeaders: ["Content-Type", "Authorization"],
-      allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-      maxAge: 86400,
+      origin: env.CORS_ALLOWED_ORIGINS
+        ? env.CORS_ALLOWED_ORIGINS.split(",")
+        : "*",
+      allowHeaders: env.CORS_ALLOWED_HEADERS
+        ? env.CORS_ALLOWED_HEADERS.split(",")
+        : ["Content-Type", "Authorization"],
+      allowMethods: env.CORS_ALLOWED_METHODS
+        ? env.CORS_ALLOWED_METHODS.split(",")
+        : ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+      credentials: env.CORS_ALLOW_CREDENTIALS,
+      maxAge: env.CORS_MAX_AGE ? Number(env.CORS_MAX_AGE) : 86400,
     }),
   );
+
   app.use("*", sanitizeBody);
 
   // ── Health ────────────────────────────────────────────────
@@ -70,30 +75,30 @@ export function createApp() {
 
   // ── Docs (non-production only) ────────────────────────────
   // if (env.APP_ENV !== "production") {
-    app.openAPIRegistry.registerComponent("securitySchemes", "bearerAuth", {
-      type: "http",
-      scheme: "bearer",
-      bearerFormat: "JWT",
-      description: "Paste your JWT from POST /api/v1/auth/login",
-    });
+  app.openAPIRegistry.registerComponent("securitySchemes", "bearerAuth", {
+    type: "http",
+    scheme: "bearer",
+    bearerFormat: "JWT",
+    description: "Paste your JWT from POST /api/v1/auth/login",
+  });
 
-    app.doc("/openapi.json", {
-      openapi: "3.0.0",
-      info: {
-        title: "PotLockNg API",
-        version: "1.0.0",
-        description:
-          "Social wagering escrow engine for the Nigerian creator economy",
-      },
-      servers: [{ url: `${env.APP_URL}`, description: "Local" }],
-      tags: [
-        { name: "Auth", description: "Registration and login" },
-        { name: "Wallet", description: "Funding, withdrawals, history" },
-        { name: "Challenges", description: "Create, join, settle" },
-      ],
-    });
+  app.doc("/openapi.json", {
+    openapi: "3.0.0",
+    info: {
+      title: "PotLockNg API",
+      version: "1.0.0",
+      description:
+        "Social wagering escrow engine for the Nigerian creator economy",
+    },
+    servers: [{ url: `${env.APP_URL}`, description: "Local" }],
+    tags: [
+      { name: "Auth", description: "Registration and login" },
+      { name: "Wallet", description: "Funding, withdrawals, history" },
+      { name: "Challenges", description: "Create, join, settle" },
+    ],
+  });
 
-    app.get("/docs", Scalar({ theme: "saturn", url: "/openapi.json" }));
+  app.get("/docs", Scalar({ theme: "saturn", url: "/openapi.json" }));
   // }
 
   app.notFound((c) =>
