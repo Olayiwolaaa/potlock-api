@@ -32,17 +32,11 @@ export function createApp() {
   app.use(
     "*",
     cors({
-      origin: env.CORS_ALLOWED_ORIGINS
-        ? env.CORS_ALLOWED_ORIGINS.split(",")
-        : "*",
-      allowHeaders: env.CORS_ALLOWED_HEADERS
-        ? env.CORS_ALLOWED_HEADERS.split(",")
-        : ["Content-Type", "Authorization"],
-      allowMethods: env.CORS_ALLOWED_METHODS
-        ? env.CORS_ALLOWED_METHODS.split(",")
-        : ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+      origin: env.CORS_ALLOWED_ORIGINS.split(","),
+      allowHeaders: env.CORS_ALLOWED_HEADERS.split(","),
+      allowMethods: env.CORS_ALLOWED_METHODS.split(","),
       credentials: env.CORS_ALLOW_CREDENTIALS,
-      maxAge: env.CORS_MAX_AGE ? Number(env.CORS_MAX_AGE) : 86400,
+      maxAge: env.CORS_MAX_AGE
     }),
   );
 
