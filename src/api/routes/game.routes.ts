@@ -1,18 +1,16 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { requireAuth } from "@api/middleware/auth";
-import { requireAdmin } from "@api/middleware/requireAdmin";
+import { requireAuth, requireAdmin } from "@api/middleware/auth";
 import { CloudinaryAdapter } from "@infrastructure/storage/CloudinaryAdapter";
 import { CreateGameUseCase } from "@application/games/CreateGameUseCase";
 import { ListGamesUseCase } from "@application/games/ListGamesUseCase";
 import { RequestGameUseCase } from "@application/games/RequestGameUseCase";
 import { ReviewGameRequestUseCase } from "@application/games/ReviewGameRequestUseCase";
 import { db } from "@infrastructure/db/client";
-import { gameRequests, games } from "@infrastructure/db/schema";
+import { gameRequests } from "@infrastructure/db/schema";
 import { eq } from "drizzle-orm";
 import {
   listGamesResponseSchema,
   requestGameBodySchema,
-  reviewGameRequestBodySchema,
   errorResponse,
 } from "@api/schemas/game.schemas";
 import type { AppEnv } from "@api/types";
@@ -25,7 +23,19 @@ const reviewRequest = new ReviewGameRequestUseCase(storage);
 
 const gameRoutes = new OpenAPIHono<AppEnv>();
 
-// ── GET /games ── public ──────────────────────────────────────────────────────
+// ── Middleware ────────────────────────────────────────────────────────────────
+// GET / is public — no auth needed
+// POST / requires admin — requireAuth runs as middleware, requireAdmin called in handler
+gameRoutes.use("/", async (c, next) => {
+  if (c.req.method === "GET") return next();
+  return requireAuth(c, next);
+});
+
+// All /requests routes require auth at minimum
+gameRoutes.use("/requests", requireAuth);
+gameRoutes.use("/requests/*", requireAuth);
+
+// ── GET /games — public ───────────────────────────────────────────────────────
 gameRoutes.openapi(
   createRoute({
     method: "get",
@@ -69,7 +79,11 @@ gameRoutes.openapi(
             schema: z.object({
               name: z.string().min(2).max(80),
               description: z.string().max(300).optional(),
-              image: z.string().openapi({ type: "string", format: "binary", description: "Game image file" }),
+              image: z.string().openapi({
+                type: "string",
+                format: "binary",
+                description: "Game image file",
+              }),
             }),
           },
         },
@@ -103,8 +117,7 @@ gameRoutes.openapi(
     },
   }),
   async (c) => {
-    await requireAuth(c, async () => { });
-    await requireAdmin(c, async () => { });
+    await requireAdmin(c); // userId already set by requireAuth middleware above
 
     const formData = await c.req.formData();
     const name = formData.get("name") as string;
@@ -133,9 +146,7 @@ gameRoutes.openapi(
   },
 );
 
-// ── POST /games/requests — auth users ────────────────────────────────────────
-gameRoutes.use("/requests*", requireAuth);
-
+// ── POST /games/requests — any authed user ────────────────────────────────────
 gameRoutes.openapi(
   createRoute({
     method: "post",
@@ -170,7 +181,7 @@ gameRoutes.openapi(
   }),
   async (c) => {
     const body = c.req.valid("json");
-    const userId = c.get("userId");
+    const userId = c.get("userId"); // set by requireAuth middleware
 
     const result = await requestGame.execute({ userId, ...body });
 
@@ -182,7 +193,7 @@ gameRoutes.openapi(
   },
 );
 
-// ── GET /games/requests — admin ───────────────────────────────────────────────
+// ── GET /games/requests — admin only ─────────────────────────────────────────
 gameRoutes.openapi(
   createRoute({
     method: "get",
@@ -220,14 +231,19 @@ gameRoutes.openapi(
     },
   }),
   async (c) => {
-    await requireAdmin(c, async () => { });
+    await requireAdmin(c); // userId already set by requireAuth middleware above
 
     const { status } = c.req.valid("query");
 
     const rows = await db
       .select()
       .from(gameRequests)
-      .where(eq(gameRequests.status, (status ?? "PENDING") as "PENDING" | "APPROVED" | "REJECTED"));
+      .where(
+        eq(
+          gameRequests.status,
+          (status ?? "PENDING") as "PENDING" | "APPROVED" | "REJECTED",
+        ),
+      );
 
     return c.json({
       success: true as const,
@@ -244,7 +260,7 @@ gameRoutes.openapi(
   },
 );
 
-// ── POST /games/requests/:requestId/review — admin ────────────────────────────
+// ── POST /games/requests/:requestId/review — admin only ──────────────────────
 gameRoutes.openapi(
   createRoute({
     method: "post",
@@ -277,7 +293,7 @@ gameRoutes.openapi(
     },
   }),
   async (c) => {
-    await requireAdmin(c, async () => { });
+    await requireAdmin(c); // userId already set by requireAuth middleware above
 
     const { requestId } = c.req.valid("param");
     const adminId = c.get("userId");

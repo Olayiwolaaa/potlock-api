@@ -1,6 +1,11 @@
 import { createMiddleware } from "hono/factory";
 import { TokenService } from "@infrastructure/auth/TokenService";
 import { UnauthorizedError } from "@domain/shared/DomainError";
+import { DomainError } from "@domain/shared/DomainError";
+import { db } from "@infrastructure/db/client";
+import { users } from "@infrastructure/db/schema";
+import { eq } from "drizzle-orm";
+import type { Context } from "hono";
 
 type AuthContext = {
   Variables: {
@@ -30,3 +35,21 @@ export const requireAuth = createMiddleware<AuthContext>(async (c, next) => {
 
   await next();
 });
+
+export const requireAdmin = async (c: Context): Promise<void> => {
+  const userId = c.get("userId") as string | undefined;
+
+  if (!userId) {
+    throw new UnauthorizedError();
+  }
+
+  const user = await db
+    .select({ role: users.role })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (!user[0] || user[0].role !== "admin") {
+    throw new DomainError("Admin access required", "FORBIDDEN", 403);
+  }
+};
