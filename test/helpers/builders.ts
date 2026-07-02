@@ -2,6 +2,7 @@ import { User } from "@domain/user/User";
 import { Wallet } from "@domain/wallet/Wallet";
 import { Challenge } from "@domain/challenge/Challenge";
 import { randomUUID } from "crypto";
+import { ChallengeWithDetails } from "@domain/challenge/IChallengeRepository";
 
 // ── User builder ──────────────────────────────────────────────────────────────
 export function buildUser(overrides: Partial<{
@@ -206,10 +207,8 @@ export class MockUserRepository implements IUserRepository {
 export class MockChallengeRepository implements IChallengeRepository {
   private store = new Map<string, Challenge>();
   private bySlug = new Map<string, string>();
-  // Optional: lets tests control what a "creator username" or "game" resolves to
-  // without wiring a real user/game repo into every challenge test.
-  private creatorUsernames = new Map<string, string>();     // creatorId → displayName
-  private games = new Map<string, { name: string; imageUrl: string | null }>(); // gameId → game
+  private creatorUsernames = new Map<string, string>(); 
+  private games = new Map<string, { name: string; imageUrl: string | null }>();
 
   seed(challenge: Challenge): void {
     this.store.set(challenge.id, challenge);
@@ -231,6 +230,24 @@ export class MockChallengeRepository implements IChallengeRepository {
   async findBySlug(slug: string): Promise<Challenge | null> {
     const id = this.bySlug.get(slug);
     return id ? (this.store.get(id) ?? null) : null;
+  }
+
+  async findBySlugWithDetails(slug: string): Promise<ChallengeWithDetails | null> {
+    const challenge = await this.findBySlug(slug);
+    if (!challenge) return null;
+    const game = challenge.gameId ? this.games.get(challenge.gameId) : undefined;
+    return {
+      challenge,
+      creator: {
+        username: null,
+        displayName: this.creatorUsernames.get(challenge.creatorId) ?? null,
+        isVerified: false,
+        profileImageUrl: null,
+        wins: 0,
+        losses: 0,
+      },
+      game: game ? { name: game.name, imageUrl: game.imageUrl, description: null } : null,
+    };
   }
 
   async findBySlugWithCreatorUsername(

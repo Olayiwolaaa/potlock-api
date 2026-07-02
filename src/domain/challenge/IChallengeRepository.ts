@@ -1,6 +1,6 @@
 import { Challenge } from "./Challenge";
 
-export type Platform = "PS" | "XBOX" | "MOBILE" | "PC";   // ← local, explicit — stops the Bun.Platform collision
+export type Platform = "PS" | "XBOX" | "MOBILE" | "PC";
 
 export interface OpenChallengeSummary {
   id: string;
@@ -35,12 +35,26 @@ export interface UserChallengeSummary {
   creator: { displayName: string; isVerified: boolean; wins: number; losses: number };
 }
 
+export interface ChallengeWithDetails {
+  challenge: Challenge;
+  creator: {
+    username: string | null;
+    displayName: string | null;
+    isVerified: boolean;
+    profileImageUrl: string | null;
+    wins: number;
+    losses: number;
+  };
+  game: { name: string; imageUrl: string | null; description: string | null } | null;
+}
+
 export interface IChallengeRepository {
   findById(id: string): Promise<Challenge | null>;
   findBySlug(slug: string): Promise<Challenge | null>;
   findBySlugWithCreatorUsername(
     slug: string,
   ): Promise<{ challenge: Challenge; creatorUsername: string | null } | null>;
+  findBySlugWithDetails(slug: string): Promise<ChallengeWithDetails | null>;
   findByCreatorId(creatorId: string): Promise<Challenge[]>;
   create(challenge: Challenge): Promise<void>;
   save(challenge: Challenge): Promise<void>;
