@@ -18,7 +18,7 @@ export class ChallengeRepository implements IChallengeRepository {
       id: record.id,
       creatorId: record.creatorId,
       opponentId: record.opponentId,
-      gameId: record.gameId,                      
+      gameId: record.gameId,
       platform: record.platform as Platform,
       stakeKobo: Number(record.stakeKobo),
       potKobo: Number(record.potKobo),
@@ -55,6 +55,56 @@ export class ChallengeRepository implements IChallengeRepository {
       },
       CacheTTL.CHALLENGE_SLUG,
     );
+  }
+
+  async findBySlugWithDetails(slug: string): Promise<{
+    challenge: Challenge;
+    creator: {
+      username: string | null;
+      displayName: string | null;
+      isVerified: boolean;
+      profileImageUrl: string | null;
+      wins: number;
+      losses: number;
+    };
+    game: { name: string; imageUrl: string | null; description: string | null } | null;
+  } | null> {
+    const result = await db
+      .select({
+        challenge: challenges,
+        creatorUsername: users.displayName,
+        creatorDisplayName: users.displayName,
+        creatorIsVerified: users.isVerified,
+        creatorProfileImageUrl: users.profileImageUrl,
+        creatorWins: users.wins,
+        creatorLosses: users.losses,
+        gameName: games.name,
+        gameImageUrl: games.imageUrl,
+        gameDescription: games.description,
+      })
+      .from(challenges)
+      .leftJoin(users, eq(challenges.creatorId, users.id))
+      .leftJoin(games, eq(challenges.gameId, games.id))
+      .where(eq(challenges.linkSlug, slug))
+      .limit(1);
+
+    if (!result[0]) return null;
+    const r = result[0];
+
+    return {
+      challenge: this.toDomain(r.challenge),
+      creator: {
+        username: r.creatorUsername ?? null,
+        displayName: r.creatorDisplayName ?? null,
+        isVerified: r.creatorIsVerified ?? false,
+        profileImageUrl: r.creatorProfileImageUrl ?? null,
+        wins: r.creatorWins ?? 0,
+        losses: r.creatorLosses ?? 0,
+      },
+      game: r.gameName
+        ? { name: r.gameName, imageUrl: r.gameImageUrl, description: r.gameDescription ?? null }
+        : null,
+    };
   }
 
   async findBySlugWithCreatorUsername(

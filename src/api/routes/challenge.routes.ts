@@ -63,17 +63,13 @@ challengeRoutes.openapi(
   },
 );
 
-// --- Resolve Shareable Link (public) ---
-// Kept public on purpose: this is a preview endpoint for someone who
-// clicked a shared link and hasn't signed up/logged in yet. No state
-// changes or fund movement happen here — that's gated behind /join.
 challengeRoutes.openapi(
   createRoute({
     method: "get",
     path: "/c/{slug}",
     tags: ["Challenges"],
     summary: "Resolve a shareable challenge link",
-    description: "Public endpoint. Returns challenge details from a short link slug.",
+    description: "Public endpoint. Returns full challenge, creator, and game details from a short link slug.",
     request: {
       params: z.object({ slug: z.string().openapi({ example: "V1StGXR8" }) }),
     },
@@ -85,13 +81,27 @@ challengeRoutes.openapi(
               z.object({
                 id: z.string(),
                 title: z.string(),
+                description: z.string().nullable(),
                 platform: z.enum(["PS", "XBOX", "MOBILE", "PC"]),
                 stakeKobo: z.number(),
+                potKobo: z.number(),
                 status: z.string(),
-                // Fix: expose creatorUsername instead of raw creatorId
-                // to avoid leaking internal user IDs on a public endpoint
-                creatorUsername: z.string().nullable(),
                 expiresAt: z.string(),
+                creator: z.object({
+                  username: z.string().nullable(),
+                  displayName: z.string().nullable(),
+                  isVerified: z.boolean(),
+                  profileImageUrl: z.string().nullable(),
+                  wins: z.number(),
+                  losses: z.number(),
+                }),
+                game: z
+                  .object({
+                    name: z.string(),
+                    imageUrl: z.string().nullable(),
+                    description: z.string().nullable(),
+                  })
+                  .nullable(),
               }),
             ),
           },
@@ -106,25 +116,31 @@ challengeRoutes.openapi(
   }),
   async (c) => {
     const { slug } = c.req.valid("param");
-    const result = await challengeRepo.findBySlugWithCreatorUsername(slug);
+    const result = await challengeRepo.findBySlugWithDetails(slug);
     if (!result) {
       return c.json({ success: false as const, error: "Challenge not found" }, 404);
     }
 
-    const { challenge, creatorUsername } = result;
+    const { challenge, creator, game } = result;
 
-    return c.json({
-      success: true as const,
-      data: {
-        id: challenge.id,
-        title: challenge.title,
-        platform: challenge.platform,
-        stakeKobo: challenge.stakeKobo,
-        status: challenge.status,
-        creatorUsername,
-        expiresAt: challenge.expiresAt.toISOString(),
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          id: challenge.id,
+          title: challenge.title,
+          description: challenge.description,
+          platform: challenge.platform,
+          stakeKobo: challenge.stakeKobo,
+          potKobo: challenge.potKobo,
+          status: challenge.status,
+          expiresAt: challenge.expiresAt.toISOString(),
+          creator,
+          game,
+        },
       },
-    }, 200);
+      200,
+    );
   },
 );
 
