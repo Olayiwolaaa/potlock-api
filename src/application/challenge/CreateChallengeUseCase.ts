@@ -18,6 +18,7 @@ interface CreateChallengeInput {
   stakeKobo: number;
   expiresInHours: number;
   gameId?: string;
+  platform: "PS" | "XBOX" | "MOBILE" | "PC";
   coverImageBuffer?: Buffer;
   coverImageMimeType?: string;
 }
@@ -89,7 +90,8 @@ export class CreateChallengeUseCase {
       id: challengeId,
       creatorId: input.creatorId,
       opponentId: null,
-      platform: "MOBILE",
+      platform: input.platform,
+      gameId: input.gameId ?? null,
       stakeKobo: stake.kobo,
       potKobo: stake.kobo,
       status: "OPEN",
