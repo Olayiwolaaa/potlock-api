@@ -3,8 +3,8 @@ import { IWalletRepository } from "@domain/wallet/IWalletRepository";
 import { FeeCalculator } from "@domain/settlement/FeeCalculator";
 import { Result, ok, err } from "@domain/shared/Result";
 import { db } from "@infrastructure/db/client";
-import { vaults, walletTransactions } from "@infrastructure/db/schema";
-import { eq } from "drizzle-orm";
+import { vaults, walletTransactions, users } from "@infrastructure/db/schema";
+import { eq, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { logger } from "@infrastructure/logger/logger";
 import {
@@ -85,15 +85,30 @@ export class SettleChallengeUseCase {
         note: `Platform fee for challenge: ${challenge.title}`,
       });
 
+      // Update denormalized win/loss counters. Done here, in the same
+      // settlement step as the payout, so the stats shown on profile
+      // cards and challenge lists can never drift from actual outcomes.
+      const loserId =
+        input.winnerId === challenge.creatorId
+          ? challenge.opponentId!
+          : challenge.creatorId;
+
+      await Promise.all([
+        db
+          .update(users)
+          .set({ wins: sql`${users.wins} + 1`, updatedAt: new Date() })
+          .where(eq(users.id, input.winnerId)),
+        db
+          .update(users)
+          .set({ losses: sql`${users.losses} + 1`, updatedAt: new Date() })
+          .where(eq(users.id, loserId)),
+      ]);
+
       await pusher.emitToMany(
         [
           Channels.challenge(challenge.id),
           Channels.user(input.winnerId),
-          Channels.user(
-            input.winnerId === challenge.creatorId
-              ? challenge.opponentId!
-              : challenge.creatorId,
-          ),
+          Channels.user(loserId),
         ],
         Events.CHALLENGE_SETTLED,
         {
