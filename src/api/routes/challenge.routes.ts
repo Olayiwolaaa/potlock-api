@@ -7,56 +7,66 @@ import { JoinChallengeUseCase } from "@application/challenge/JoinChallengeUseCas
 import { SettleChallengeUseCase } from "@application/challenge/SettleChallengeUseCase";
 import {
   createChallengeBodySchema,
-  declarWinnerBodySchema,
+  declareWinnerBodySchema,
   challengeResponseSchema,
   settleResponseSchema,
+  publicChallengeListSchema,
 } from "@api/schemas/challenge.schemas";
 import { AppEnv } from "@api/types";
 import { successResponse, errorResponse } from "@api/schemas/common.schemas";
 import { GetUserChallengesUseCase } from "@application/challenge/GetUserChallengesUseCase";
 import { challengeListSchema } from "@api/schemas/challenge.schemas";
 import { paginationQuery } from "@api/schemas/wallet.schemas";
-import { platform } from "os";
 
-const getUserChallenges = new GetUserChallengesUseCase();
 const challengeRepo = new ChallengeRepository();
+const getUserChallenges = new GetUserChallengesUseCase(challengeRepo);
 const walletRepo = new WalletRepository();
 const createChallenge = new CreateChallengeUseCase(challengeRepo, walletRepo);
 const joinChallenge = new JoinChallengeUseCase(challengeRepo, walletRepo);
 const settleChallenge = new SettleChallengeUseCase(challengeRepo, walletRepo);
 const challengeRoutes = new OpenAPIHono<AppEnv>();
 
-challengeRoutes.use("*", requireAuth);
-
-// --- Create Challenge ---
+// --- List Open Challenges (public) ---
 challengeRoutes.openapi(
   createRoute({
-    method: "post",
+    method: "get",
     path: "/",
     tags: ["Challenges"],
-    summary: "Create a new challenge",
-    description: "Stakes are immediately locked from your wallet. Share the link to invite an opponent.",
-    security: [{ bearerAuth: [] }],
+    summary: "List open challenges",
+    description: "Public endpoint. Returns all open challenges for the arena page.",
     request: {
-      body: { content: { "application/json": { schema: createChallengeBodySchema } }, required: true },
+      query: z.object({
+        limit: z.coerce.number().int().min(1).max(50).default(20).optional(),
+        offset: z.coerce.number().int().min(0).default(0).optional(),
+        game: z.string().optional().openapi({ description: "Filter by game slug" }),
+        platform: z.enum(["PS", "XBOX", "MOBILE", "PC"]).optional(),
+      }),
     },
     responses: {
-      201: { content: { "application/json": { schema: challengeResponseSchema } }, description: "Challenge created" },
-      400: { content: { "application/json": { schema: errorResponse } }, description: "Validation or insufficient funds" },
+      200: {
+        content: { "application/json": { schema: publicChallengeListSchema } },
+        description: "Open challenges",
+      },
     },
   }),
   async (c) => {
-    const body = c.req.valid("json");
-    const userId = c.get("userId");
+    const { limit = 20, offset = 0, game, platform } = c.req.valid("query");
 
-    const result = await createChallenge.execute({ creatorId: userId, ...body });
-    if (!result.success) return c.json({ success: false as const, error: result.error }, 400);
+    const result = await challengeRepo.findOpenChallenges({
+      limit,
+      offset,
+      gameSlug: game,
+      platform,
+    });
 
-    return c.json({ success: true as const, data: result.value }, 201);
+    return c.json({ success: true as const, data: result }, 200);
   },
 );
 
-// --- Get Challenge by Slug ---
+// --- Resolve Shareable Link (public) ---
+// Kept public on purpose: this is a preview endpoint for someone who
+// clicked a shared link and hasn't signed up/logged in yet. No state
+// changes or fund movement happen here — that's gated behind /join.
 challengeRoutes.openapi(
   createRoute({
     method: "get",
@@ -71,27 +81,37 @@ challengeRoutes.openapi(
       200: {
         content: {
           "application/json": {
-            schema: successResponse(z.object({
-              id: z.string(),
-              title: z.string(),
-              stakeKobo: z.number(),
-              status: z.string(),
-              creatorId: z.string(),
-              expiresAt: z.string(),
-            })),
+            schema: successResponse(
+              z.object({
+                id: z.string(),
+                title: z.string(),
+                platform: z.enum(["PS", "XBOX", "MOBILE", "PC"]),
+                stakeKobo: z.number(),
+                status: z.string(),
+                // Fix: expose creatorUsername instead of raw creatorId
+                // to avoid leaking internal user IDs on a public endpoint
+                creatorUsername: z.string().nullable(),
+                expiresAt: z.string(),
+              }),
+            ),
           },
         },
         description: "Challenge details",
       },
-      404: { content: { "application/json": { schema: errorResponse } }, description: "Not found" },
+      404: {
+        content: { "application/json": { schema: errorResponse } },
+        description: "Not found",
+      },
     },
   }),
   async (c) => {
     const { slug } = c.req.valid("param");
-    const challenge = await challengeRepo.findBySlug(slug);
-    if (!challenge) {
+    const result = await challengeRepo.findBySlugWithCreatorUsername(slug);
+    if (!result) {
       return c.json({ success: false as const, error: "Challenge not found" }, 404);
     }
+
+    const { challenge, creatorUsername } = result;
 
     return c.json({
       success: true as const,
@@ -101,10 +121,51 @@ challengeRoutes.openapi(
         platform: challenge.platform,
         stakeKobo: challenge.stakeKobo,
         status: challenge.status,
-        creatorId: challenge.creatorId,
+        creatorUsername,
         expiresAt: challenge.expiresAt.toISOString(),
       },
     }, 200);
+  },
+);
+
+// --- Everything below requires auth ---
+challengeRoutes.use("*", requireAuth);
+
+// --- Create Challenge ---
+challengeRoutes.openapi(
+  createRoute({
+    method: "post",
+    path: "/",
+    tags: ["Challenges"],
+    summary: "Create a new challenge",
+    description:
+      "Stakes are immediately locked from your wallet. Share the link to invite an opponent.",
+    security: [{ bearerAuth: [] }],
+    request: {
+      body: {
+        content: { "application/json": { schema: createChallengeBodySchema } },
+        required: true,
+      },
+    },
+    responses: {
+      201: {
+        content: { "application/json": { schema: challengeResponseSchema } },
+        description: "Challenge created",
+      },
+      400: {
+        content: { "application/json": { schema: errorResponse } },
+        description: "Validation or insufficient funds",
+      },
+    },
+  }),
+  async (c) => {
+    const body = c.req.valid("json");
+    const userId = c.get("userId");
+
+    const result = await createChallenge.execute({ creatorId: userId, ...body });
+    if (!result.success) return c.json({ success: false as const, error: result.error }, 400);
+
+    return c.json({ success: true as const, data: result.value }, 201);
   },
 );
 
@@ -124,15 +185,20 @@ challengeRoutes.openapi(
       200: {
         content: {
           "application/json": {
-            schema: successResponse(z.object({
-              challengeId: z.string(),
-              potKobo: z.number(),
-            })),
+            schema: successResponse(
+              z.object({
+                challengeId: z.string(),
+                potKobo: z.number(),
+              }),
+            ),
           },
         },
         description: "Joined successfully",
       },
-      400: { content: { "application/json": { schema: errorResponse } }, description: "Cannot join" },
+      400: {
+        content: { "application/json": { schema: errorResponse } },
+        description: "Cannot join",
+      },
     },
   }),
   async (c) => {
@@ -157,11 +223,20 @@ challengeRoutes.openapi(
     security: [{ bearerAuth: [] }],
     request: {
       params: z.object({ id: z.string().uuid() }),
-      body: { content: { "application/json": { schema: declarWinnerBodySchema } }, required: true },
+      body: {
+        content: { "application/json": { schema: declareWinnerBodySchema } },
+        required: true,
+      },
     },
     responses: {
-      200: { content: { "application/json": { schema: settleResponseSchema } }, description: "Declaration recorded" },
-      400: { content: { "application/json": { schema: errorResponse } }, description: "Invalid declaration" },
+      200: {
+        content: { "application/json": { schema: settleResponseSchema } },
+        description: "Declaration recorded",
+      },
+      400: {
+        content: { "application/json": { schema: errorResponse } },
+        description: "Invalid declaration",
+      },
     },
   }),
   async (c) => {

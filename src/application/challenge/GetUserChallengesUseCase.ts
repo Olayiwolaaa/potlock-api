@@ -1,6 +1,4 @@
-import { db } from "@infrastructure/db/client";
-import { challenges, users } from "@infrastructure/db/schema";
-import { eq, or, desc } from "drizzle-orm";
+import { ChallengeRepository } from "@infrastructure/db/repositories/ChallengeRepository";
 import { Result, ok } from "@domain/shared/Result";
 
 interface GetUserChallengesInput {
@@ -22,6 +20,16 @@ export interface ChallengeListItem {
   opponentId: string | null;
   expiresAt: string;
   createdAt: string;
+  game: {
+    name: string;
+    imageUrl: string | null;
+  };
+  creator: {
+    displayName: string;
+    isVerified: boolean;
+    wins: number;
+    losses: number;
+  };
 }
 
 interface GetUserChallengesOutput {
@@ -30,42 +38,25 @@ interface GetUserChallengesOutput {
 }
 
 export class GetUserChallengesUseCase {
+  // Takes the repository as a constructor dependency instead of
+  // importing `db` directly, matching how the other use cases in this
+  // app are wired (e.g. SettleChallengeUseCase takes IChallengeRepository).
+  constructor(private readonly challengeRepo: ChallengeRepository) {}
+
   async execute(
     input: GetUserChallengesInput,
   ): Promise<Result<GetUserChallengesOutput>> {
     const limit = input.limit ?? 20;
     const offset = input.offset ?? 0;
 
-    // Fetch all challenges where user is creator OR opponent
-    const rows = await db
-      .select()
-      .from(challenges)
-      .where(
-        or(
-          eq(challenges.creatorId, input.userId),
-          eq(challenges.opponentId, input.userId),
-        ),
-      )
-      .orderBy(desc(challenges.createdAt))
-      .limit(limit)
-      .offset(offset);
+    const { rows, total } = await this.challengeRepo.findByUserIdWithDetails(
+      input.userId,
+      { limit, offset },
+    );
 
     return ok({
-      challenges: rows.map((row) => ({
-        id: row.id,
-        title: row.title,
-        platform: row.platform,
-        stakeKobo: Number(row.stakeKobo),
-        potKobo: Number(row.potKobo),
-        status: row.status,
-        linkSlug: row.linkSlug,
-        role: row.creatorId === input.userId ? "CREATOR" : "OPPONENT",
-        creatorId: row.creatorId,
-        opponentId: row.opponentId,
-        expiresAt: row.expiresAt.toISOString(),
-        createdAt: row.createdAt.toISOString(),
-      })),
-      total: rows.length,
+      challenges: rows,
+      total,
     });
   }
 }
