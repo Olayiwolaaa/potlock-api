@@ -46,6 +46,7 @@ export function buildChallenge(overrides: Partial<{
   id: string;
   creatorId: string;
   opponentId: string | null;
+  gameId: string | null;
   platform: "PS" | "XBOX" | "MOBILE" | "PC";
   stakeKobo: number;
   potKobo: number;
@@ -62,6 +63,7 @@ export function buildChallenge(overrides: Partial<{
     id: randomUUID(),
     creatorId: randomUUID(),
     opponentId: null,
+    gameId: null,
     platform: "PS",
     stakeKobo: 500_000,
     potKobo: 500_000,
@@ -77,18 +79,14 @@ export function buildChallenge(overrides: Partial<{
   });
 }
 
-// ── In-memory mock repositories ───────────────────────────────────────────────
-// These implement the same interfaces your use cases depend on
-// but store data in a Map instead of a database
-
 import { IWalletRepository } from "@domain/wallet/IWalletRepository";
 import { IUserRepository } from "@domain/user/IUserRepository";
-import { IChallengeRepository } from "@domain/challenge/IChallengeRepository";
+import { IChallengeRepository, OpenChallengeSummary, UserChallengeSummary } from "@domain/challenge/IChallengeRepository";
 import { Money } from "@src/domain/shared/Money";
 
 export class MockWalletRepository implements IWalletRepository {
-  private store = new Map<string, Wallet>();          // id → wallet
-  private byUser = new Map<string, string>();         // userId → id
+  private store = new Map<string, Wallet>();      
+  private byUser = new Map<string, string>(); 
 
   seed(wallet: Wallet): void {
     this.store.set(wallet.id, wallet);
@@ -208,10 +206,22 @@ export class MockUserRepository implements IUserRepository {
 export class MockChallengeRepository implements IChallengeRepository {
   private store = new Map<string, Challenge>();
   private bySlug = new Map<string, string>();
+  // Optional: lets tests control what a "creator username" or "game" resolves to
+  // without wiring a real user/game repo into every challenge test.
+  private creatorUsernames = new Map<string, string>();     // creatorId → displayName
+  private games = new Map<string, { name: string; imageUrl: string | null }>(); // gameId → game
 
   seed(challenge: Challenge): void {
     this.store.set(challenge.id, challenge);
     this.bySlug.set(challenge.linkSlug, challenge.id);
+  }
+
+  seedCreatorUsername(creatorId: string, displayName: string): void {
+    this.creatorUsernames.set(creatorId, displayName);
+  }
+
+  seedGame(gameId: string, game: { name: string; imageUrl: string | null }): void {
+    this.games.set(gameId, game);
   }
 
   async findById(id: string): Promise<Challenge | null> {
@@ -221,6 +231,17 @@ export class MockChallengeRepository implements IChallengeRepository {
   async findBySlug(slug: string): Promise<Challenge | null> {
     const id = this.bySlug.get(slug);
     return id ? (this.store.get(id) ?? null) : null;
+  }
+
+  async findBySlugWithCreatorUsername(
+    slug: string,
+  ): Promise<{ challenge: Challenge; creatorUsername: string | null } | null> {
+    const challenge = await this.findBySlug(slug);
+    if (!challenge) return null;
+    return {
+      challenge,
+      creatorUsername: this.creatorUsernames.get(challenge.creatorId) ?? null,
+    };
   }
 
   async findByCreatorId(creatorId: string): Promise<Challenge[]> {
@@ -233,5 +254,83 @@ export class MockChallengeRepository implements IChallengeRepository {
 
   async save(challenge: Challenge): Promise<void> {
     this.seed(challenge);
+  }
+
+  async findOpenChallenges(opts: {
+    limit: number;
+    offset: number;
+    gameSlug?: string;
+    platform?: "PS" | "XBOX" | "MOBILE" | "PC";
+  }): Promise<{ challenges: OpenChallengeSummary[]; total: number }> {
+    let matches = [...this.store.values()].filter((c) => c.status === "OPEN");
+
+    if (opts.platform) {
+      matches = matches.filter((c) => c.platform === opts.platform);
+    }
+    // gameSlug filtering is skipped — mock has no game/slug relationship;
+    // add one if a test actually needs it.
+
+    const total = matches.length;
+    const page = matches.slice(opts.offset, opts.offset + opts.limit);
+
+    const challenges: OpenChallengeSummary[] = page.map((c) => {
+      const game = c.gameId ? this.games.get(c.gameId) : undefined;
+      return {
+        id: c.id,
+        title: c.title,
+        description: c.description,
+        platform: c.platform,
+        stakeKobo: c.stakeKobo,
+        potKobo: c.potKobo,
+        status: c.status,
+        linkSlug: c.linkSlug,
+        creatorUsername: this.creatorUsernames.get(c.creatorId) ?? "Unknown",
+        gameName: game?.name ?? null,
+        gameImageUrl: game?.imageUrl ?? null,
+        expiresAt: c.expiresAt.toISOString(),
+        createdAt: c.createdAt.toISOString(),
+      };
+    });
+
+    return { challenges, total };
+  }
+
+  async findByUserIdWithDetails(
+    userId: string,
+    opts: { limit: number; offset: number },
+  ): Promise<{ rows: UserChallengeSummary[]; total: number }> {
+    const matches = [...this.store.values()].filter(
+      (c) => c.creatorId === userId || c.opponentId === userId,
+    );
+
+    const total = matches.length;
+    const page = matches.slice(opts.offset, opts.offset + opts.limit);
+
+    const rows: UserChallengeSummary[] = page.map((c) => {
+      const game = c.gameId ? this.games.get(c.gameId) : undefined;
+      return {
+        id: c.id,
+        title: c.title,
+        platform: c.platform,
+        stakeKobo: c.stakeKobo,
+        potKobo: c.potKobo,
+        status: c.status,
+        linkSlug: c.linkSlug,
+        role: c.creatorId === userId ? "CREATOR" : "OPPONENT",
+        creatorId: c.creatorId,
+        opponentId: c.opponentId,
+        expiresAt: c.expiresAt.toISOString(),
+        createdAt: c.createdAt.toISOString(),
+        game: { name: game?.name ?? "Unknown Game", imageUrl: game?.imageUrl ?? null },
+        creator: {
+          displayName: this.creatorUsernames.get(c.creatorId) ?? "Player",
+          isVerified: false,
+          wins: 0,
+          losses: 0,
+        },
+      };
+    });
+
+    return { rows, total };
   }
 }

@@ -13,6 +13,7 @@ interface ChallengeProps {
   id: string;
   creatorId: string;
   opponentId: string | null;
+  gameId: string | null,
   platform: "PS" | "XBOX" | "MOBILE" | "PC";
   stakeKobo: number;
   potKobo: number;
@@ -37,18 +38,20 @@ export class Challenge {
   get id() { return this.props.id; }
   get creatorId() { return this.props.creatorId; }
   get opponentId() { return this.props.opponentId; }
+  get gameId() { return this.props.gameId; }
   get platform() { return this.props.platform; }
   get status() { return this.props.status; }
   get linkSlug() { return this.props.linkSlug; }
   get title() { return this.props.title; }
   get description() { return this.props.description; }
-  get expiresAt() { return this.props.expiresAt; }
   get stakeKobo() { return this.props.stakeKobo; }
   get potKobo() { return this.props.potKobo; }
   get stake() { return Money.fromKobo(this.props.stakeKobo); }
   get pot() { return Money.fromKobo(this.props.potKobo); }
   get declaredWinnerId() { return this.props.declaredWinnerId; }
   get opponentDeclaredWinnerId() { return this.props.opponentDeclaredWinnerId; }
+  get expiresAt() { return this.props.expiresAt; }
+  get createdAt() { return this.props.createdAt; }
 
   get isExpired(): boolean {
     return new Date() > this.props.expiresAt;
