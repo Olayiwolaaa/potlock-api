@@ -9,6 +9,28 @@ export const walletBalanceSchema = successResponse(
   }),
 ).openapi("WalletBalance");
 
+export const bankListSchema = successResponse(
+  z.array(
+    z.object({
+      name: z.string().openapi({ example: "Guaranty Trust Bank" }),
+      code: z.string().openapi({ example: "058" }),
+      slug: z.string().openapi({ example: "guaranty-trust-bank" }),
+    }),
+  ),
+).openapi("BankList");
+
+export const bankAccountListSchema = successResponse(
+  z.array(
+    z.object({
+      id: z.string().uuid(),
+      accountName: z.string(),
+      accountNumber: z.string(),
+      bankName: z.string(),
+      isDefault: z.boolean(),
+    }),
+  ),
+).openapi("BankAccountList");
+
 export const initializePaymentBodySchema = z.object({
   amountKobo: z.number().int().min(10_000).openapi({
     example: 500_000,
@@ -27,7 +49,7 @@ export const initializePaymentResponseSchema = successResponse(
 ).openapi("InitializePaymentResponse");
 
 export const addBankAccountBodySchema = z.object({
-  accountNumber: z.string().length(10).openapi({ example: "0123456789" }),
+  accountNumber: z.string().regex(/^\d{10}$/).openapi({ example: "0123456789" }),
   bankCode: z.string().openapi({ example: "058", description: "Paystack bank code" }),
   bankName: z.string().openapi({ example: "GTBank" }),
   setAsDefault: z.boolean().default(true),

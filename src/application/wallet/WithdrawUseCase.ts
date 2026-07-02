@@ -28,7 +28,7 @@ export class WithdrawUseCase {
   constructor(
     private readonly walletRepo: IWalletRepository,
     private readonly paystack: PaystackAdapter,
-  ) {}
+  ) { }
 
   async execute(input: WithdrawInput): Promise<Result<WithdrawOutput>> {
     const MIN_WITHDRAWAL = Money.fromNaira(500);
@@ -84,13 +84,12 @@ export class WithdrawUseCase {
 
     // 4. Calculate fee and total debit
     const fee = FeeCalculator.withdrawalFee();
-    const totalDebit = requestedAmount.add(fee);
+    const totalDebit = requestedAmount;
+    const netAmount = requestedAmount.subtract(fee);
 
-    // 5. Atomic debit — prevents double-spend race condition
-    const wallet = await this.walletRepo.debitAtomic(
-      input.userId,
-      totalDebit.kobo,
-    );
+    // 5. Atomic debit — prevents double-spend race condition\
+    const wallet = await this.walletRepo.debitAtomic(input.userId, totalDebit.kobo);
+
     if (!wallet) {
       return err(
         `Insufficient balance. You need ${totalDebit.toString()} (including ₦50 fee).`,
@@ -101,7 +100,7 @@ export class WithdrawUseCase {
     const reference = `wd_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
 
     const transfer = await this.paystack.initiateTransfer({
-      amountKobo: requestedAmount.kobo,
+      amountKobo: netAmount.kobo,
       recipientCode: bankAccount[0].paystackRecipientCode,
       reference,
       reason: "PotLockNg withdrawal",
@@ -146,7 +145,7 @@ export class WithdrawUseCase {
       reference,
       amountKobo: requestedAmount.kobo,
       feeKobo: fee.kobo,
-      netAmountKobo: requestedAmount.kobo,
+      netAmountKobo: netAmount.kobo,
     });
   }
 }
