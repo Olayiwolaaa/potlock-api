@@ -1,5 +1,5 @@
-import { env } from "@config/env";
-import { logger } from "@infrastructure/logger/logger";
+// infrastructure/payment/PaystackIdentityAdapter.ts
+import { PaystackHttpClient } from "./PaystackHttpClient";
 
 export interface BvnVerificationResult {
   firstName: string;
@@ -9,37 +9,35 @@ export interface BvnVerificationResult {
   bvn: string;
 }
 
-export class PaystackIdentityAdapter {
-  private readonly baseUrl = "https://api.paystack.co";
-  private readonly headers = {
-    Authorization: `Bearer ${env.PAYSTACK_SECRET_KEY}`,
-    "Content-Type": "application/json",
-  };
+interface PaystackBvnResolveResponse {
+  bvn: string;
+  first_name: string;
+  last_name: string;
+  dob: string;
+  mobile: string;
+}
 
+export class PaystackIdentityAdapter extends PaystackHttpClient {
+  /**
+   * Resolves BVN details directly via Paystack's legacy BVN Resolve endpoint.
+   * NOTE: this endpoint is being deprecated in favor of the async
+   * "Validate Customer" flow — confirm your Paystack account still has
+   * access before relying on this in production.
+   */
   async verifyBvn(bvn: string): Promise<BvnVerificationResult | null> {
-    try {
-      const res = await fetch(`${this.baseUrl}/identity/bvn/match`, {
-        method: "POST",
-        headers: this.headers,
-        body: JSON.stringify({ bvn }),
-      });
+    const data = await this.request<PaystackBvnResolveResponse>(
+      "GET",
+      `/bank/resolve_bvn/${bvn}`,
+    );
 
-      const data = await res.json();
-      if (!res.ok || !data.status) {
-        logger.error({ message: data.message }, "BVN verification failed");
-        return null;
-      }
+    if (!data) return null;
 
-      return {
-        firstName: data.data.first_name,
-        lastName: data.data.last_name,
-        dateOfBirth: data.data.dob,
-        phoneNumber: data.data.mobile,
-        bvn: data.data.bvn,
-      };
-    } catch (error) {
-      logger.error({ error }, "BVN verification error");
-      return null;
-    }
+    return {
+      firstName: data.first_name,
+      lastName: data.last_name,
+      dateOfBirth: data.dob,
+      phoneNumber: data.mobile,
+      bvn: data.bvn,
+    };
   }
 }

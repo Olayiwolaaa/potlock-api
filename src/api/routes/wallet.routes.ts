@@ -2,6 +2,8 @@ import { GetTransactionHistoryUseCase } from "@application/wallet/GetTransaction
 import {
   transactionHistorySchema,
   paginationQuery,
+  bankListSchema,
+  bankAccountListSchema,
 } from "@api/schemas/wallet.schemas";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { requireAuth } from "@api/middleware/auth";
@@ -34,6 +36,11 @@ const addBankAccount = new AddBankAccountUseCase(paystack);
 const withdraw = new WithdrawUseCase(walletRepo, paystack);
 const getTransactionHistory = new GetTransactionHistoryUseCase();
 const walletRoutes = new OpenAPIHono<AppEnv>();
+
+let banksCache: { name: string; code: string; slug: string }[] | null = null;
+let banksCacheAt = 0;
+const BANKS_CACHE_TTL_MS = 60 * 60 * 1000;
+
 
 walletRoutes.use("*", requireAuth);
 
@@ -208,22 +215,7 @@ walletRoutes.openapi(
     security: [{ bearerAuth: [] }],
     responses: {
       200: {
-        content: {
-          "application/json": {
-            schema: z.object({
-              success: z.literal(true),
-              data: z.array(
-                z.object({
-                  id: z.string(),
-                  accountName: z.string(),
-                  accountNumber: z.string(),
-                  bankName: z.string(),
-                  isDefault: z.boolean(),
-                }),
-              ),
-            }),
-          },
-        },
+        content: { "application/json": { schema: bankAccountListSchema } },
         description: "Bank accounts",
       },
     },
@@ -245,6 +237,48 @@ walletRoutes.openapi(
         isDefault: a.isDefault,
       })),
     }, 200);
+  },
+);
+
+// --- List Banks ---
+walletRoutes.openapi(
+  createRoute({
+    method: "get",
+    path: "/banks",
+    tags: ["Wallet"],
+    summary: "List banks supported for withdrawal (via Paystack)",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        content: { "application/json": { schema: bankListSchema } },
+        description: "Supported banks",
+      },
+      400: {
+        content: { "application/json": { schema: errorResponse } },
+        description: "Failed to fetch bank list",
+      },
+    },
+  }),
+  async (c) => {
+    const now = Date.now();
+    if (!banksCache || now - banksCacheAt > BANKS_CACHE_TTL_MS) {
+      const banks = await paystack.listBanks();
+      if (banks.length > 0) {
+        banksCache = banks.map((b) => ({
+          name: b.name,
+          code: b.code,
+          slug: b.slug,
+        }));
+        banksCacheAt = now;
+      } else if (!banksCache) {
+        return c.json(
+          { success: false as const, error: "Failed to fetch bank list" },
+          400,
+        );
+      }
+    }
+
+    return c.json({ success: true as const, data: banksCache }, 200);
   },
 );
 

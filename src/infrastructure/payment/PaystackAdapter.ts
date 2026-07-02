@@ -1,5 +1,16 @@
-import { env } from "@config/env";
-import { logger } from "@infrastructure/logger/logger";
+// infrastructure/payment/PaystackAdapter.ts
+import { PaystackHttpClient } from "./PaystackHttpClient";
+
+interface PaystackBank {
+  name: string;
+  code: string;
+  slug: string;
+  longcode: string;
+  active: boolean;
+  country: string;
+  currency: string;
+  type: string;
+}
 
 // --- Types ---
 export interface InitializePaymentParams {
@@ -46,47 +57,11 @@ export interface InitiateTransferResult {
 }
 
 // --- Adapter ---
-export class PaystackAdapter {
-  private readonly baseUrl = env.PAYSTACK_BASE_URL;
-  private readonly headers = {
-    Authorization: `Bearer ${env.PAYSTACK_SECRET_KEY}`,
-    "Content-Type": "application/json",
-  };
-
-  private async request<T>(
-    method: string,
-    path: string,
-    body?: unknown,
-  ): Promise<T | null> {
-    try {
-      const res = await fetch(`${this.baseUrl}${path}`, {
-        method,
-        headers: this.headers,
-        body: body ? JSON.stringify(body) : undefined,
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || !data.status) {
-        logger.error(
-          { path, status: res.status, message: data.message },
-          "Paystack error",
-        );
-        return null;
-      }
-
-      return data.data as T;
-    } catch (error) {
-      logger.error({ path, error }, "Paystack request failed");
-      return null;
-    }
-  }
-
+export class PaystackAdapter extends PaystackHttpClient {
   // Step 1 of funding: create a checkout session
   async initializePayment(
     params: InitializePaymentParams,
   ): Promise<InitializePaymentResult | null> {
-    // Tell TypeScript what Paystack ACTUALLY returns (snake_case)
     const data = await this.request<{
       authorization_url: string;
       access_code: string;
@@ -101,7 +76,6 @@ export class PaystackAdapter {
 
     if (!data) return null;
 
-    // Map to your camelCase shape here, once, in one place
     return {
       authorizationUrl: data.authorization_url,
       accessCode: data.access_code,
@@ -150,6 +124,17 @@ export class PaystackAdapter {
     };
   }
 
+  async listBanks(): Promise<PaystackBank[]> {
+    const data = await this.request<PaystackBank[]>(
+      "GET",
+      "/bank?country=nigeria&currency=NGN&type=nuban",
+    );
+
+    if (!data) return [];
+
+    return data.filter((b) => b.active);
+  }
+
   // Create a transfer recipient (required before sending money)
   async createRecipient(params: {
     accountName: string;
@@ -157,7 +142,7 @@ export class PaystackAdapter {
     bankCode: string;
   }): Promise<CreateRecipientResult | null> {
     const data = await this.request<{
-      recipient_code: string; // ← snake_case from Paystack
+      recipient_code: string;
       details: { account_name: string };
     }>("POST", "/transferrecipient", {
       type: "nuban",
