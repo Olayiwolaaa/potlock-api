@@ -21,6 +21,7 @@ import { betRoutes } from "@api/routes/bet.routes";
 import { pusherRoutes } from "@api/routes/pusher.routes";
 import { userRoutes } from "@api/routes/user.routes";
 import { gameRoutes } from "@api/routes/game.routes";
+import { feedbackRoutes } from "@api/routes/feedback.routes";
 
 export function createApp() {
   const app = new OpenAPIHono();
@@ -64,6 +65,8 @@ export function createApp() {
   app.route("/api/v1/kyc", kycRoutes);
   app.route("/api/v1/tournaments", tournamentRoutes);
   app.route("/api/v1/bets", betRoutes);
+
+  app.route("/api/v1/feedback", feedbackRoutes);
 
   app.route("/pusher", pusherRoutes);
 

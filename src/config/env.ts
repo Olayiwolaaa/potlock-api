@@ -29,7 +29,9 @@ const envSchema = z.object({
   REDIS_URL: z.url(),
   GOOGLE_CLIENT_ID: z.string(),
   GOOGLE_CLIENT_SECRET: z.string(),
-  FRONTEND_URL: z.url().optional(),
+  RESEND_API_KEY: z.string().startsWith("re_"),
+  EMAIL_FROM: z.email(),
+  FEEDBACK_TO_EMAIL: z.email()
 });
 
 const parsed = envSchema.safeParse(process.env);

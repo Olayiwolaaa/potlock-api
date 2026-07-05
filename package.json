@@ -29,6 +29,7 @@
     "postgres": "^3.4.9",
     "pusher": "^5.3.3",
     "pusher-js": "^8.5.0",
+    "resend": "^6.17.1",
     "zod": "^4.4.3",
     "zod-openapi": "4"
   },

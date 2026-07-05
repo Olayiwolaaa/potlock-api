@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "bun:test";
 import { RegisterUseCase } from "@application/auth/RegisterUseCase";
 import {
+  MockEmailService,
   MockUserRepository,
   MockWalletRepository,
 } from "../../helpers/builders";
@@ -17,6 +18,7 @@ describe("RegisterUseCase", () => {
   let userRepo: MockUserRepository;
   let walletRepo: MockWalletRepository;
   let useCase: RegisterUseCase;
+  let emailService: MockEmailService;
 
   const validInput = {
     email: "test@test.com",
@@ -28,12 +30,27 @@ describe("RegisterUseCase", () => {
   beforeEach(() => {
     userRepo = new MockUserRepository();
     walletRepo = new MockWalletRepository();
-    useCase = new RegisterUseCase(userRepo, walletRepo, new MockTokenService());
+    emailService = new MockEmailService();
+    useCase = new RegisterUseCase(userRepo, walletRepo, new MockTokenService(), emailService);
   });
 
   it("registers a new user successfully", async () => {
     const result = await useCase.execute(validInput);
     expect(result.success).toBe(true);
+  });
+
+  it("sends a welcome email on successful registration", async () => {
+    const result = await useCase.execute(validInput);
+
+    expect(result.success).toBe(true);
+    expect(emailService.sentEmails).toHaveLength(1);
+
+    const sentEmail = emailService.sentEmails[0];
+    expect(sentEmail).toBeDefined();
+    if (!sentEmail) throw new Error("Expected an email to have been sent");
+
+    expect(sentEmail.to).toBe(validInput.email);
+    expect(sentEmail.subject).toBe("Welcome to Potlock");
   });
 
   it("returns a token on success", async () => {

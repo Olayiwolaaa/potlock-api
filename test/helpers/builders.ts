@@ -83,7 +83,8 @@ export function buildChallenge(overrides: Partial<{
 import { IWalletRepository } from "@domain/wallet/IWalletRepository";
 import { IUserRepository } from "@domain/user/IUserRepository";
 import { IChallengeRepository, OpenChallengeSummary, UserChallengeSummary } from "@domain/challenge/IChallengeRepository";
-import { Money } from "@src/domain/shared/Money";
+import { Money } from "@domain/shared/Money";
+import { EmailPayload, IEmailService } from "@domain/shared/IEmailService";
 
 export class MockWalletRepository implements IWalletRepository {
   private store = new Map<string, Wallet>();      
@@ -349,5 +350,13 @@ export class MockChallengeRepository implements IChallengeRepository {
     });
 
     return { rows, total };
+  }
+}
+
+export class MockEmailService implements IEmailService {
+  sentEmails: EmailPayload[] = [];
+
+  async send(payload: EmailPayload): Promise<void> {
+    this.sentEmails.push(payload);
   }
 }
