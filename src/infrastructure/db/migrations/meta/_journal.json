@@ -8,6 +8,13 @@
       "when": 1777862688061,
       "tag": "0000_complex_khan",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1778120000000,
+      "tag": "0001_add_bvn_validation_fields",
+      "breakpoints": true
     }
   ]
 }

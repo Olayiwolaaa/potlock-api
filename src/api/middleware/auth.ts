@@ -36,6 +36,21 @@ export const requireAuth = createMiddleware<AuthContext>(async (c, next) => {
   await next();
 });
 
+export const optionalAuth = createMiddleware<AuthContext>(async (c, next) => {
+  const authHeader = c.req.header("Authorization");
+
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.slice(7);
+    const payload = await tokenService.verify(token);
+    if (payload) {
+      c.set("userId", payload.userId);
+      c.set("email", payload.email);
+    }
+  }
+
+  await next();
+});
+
 export const requireAdmin = async (c: Context): Promise<void> => {
   const userId = c.get("userId") as string | undefined;
 

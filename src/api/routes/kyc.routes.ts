@@ -76,6 +76,8 @@ kycRoutes.openapi(
         dailyWithdrawnNaira: Money.fromKobo(withdrawnKobo).naira,
         remainingTodayNaira: Money.fromKobo(remainingKobo).naira,
         bvnVerified: profile[0]?.bvnStatus === "VERIFIED",
+        bvnPending: profile[0]?.bvnStatus === "PENDING" && !!profile[0]?.paystackCustomerCode,
+        bvnFailureReason: profile[0]?.bvnFailureReason ?? null,
         addressVerified: profile[0]?.addressStatus === "VERIFIED",
         nextTierRequirement: nextTierMap[tier],
       },
@@ -91,7 +93,7 @@ kycRoutes.openapi(
     tags: ["KYC"],
     summary: "Submit BVN for Tier 1 verification",
     description:
-      "Verifies your BVN with Paystack Identity. On success, your daily withdrawal limit increases to ₦50,000. Your BVN is masked before storage — we never store the raw value.",
+      "Starts BVN verification with Paystack against one of your saved bank accounts. This is asynchronous — Paystack confirms the result via webhook, usually within a few minutes. Poll GET /kyc/status to see when it completes. Your BVN is masked before storage — we never store the raw value.",
     security: [{ bearerAuth: [] }],
     request: {
       body: {
@@ -102,11 +104,11 @@ kycRoutes.openapi(
     responses: {
       200: {
         content: { "application/json": { schema: submitBvnResponseSchema } },
-        description: "BVN verified successfully",
+        description: "BVN submitted for verification (pending)",
       },
       400: {
         content: { "application/json": { schema: errorResponse } },
-        description: "Invalid BVN or verification failed",
+        description: "Invalid BVN, invalid bank account, or verification already complete/in progress",
       },
       401: {
         content: { "application/json": { schema: errorResponse } },
@@ -115,7 +117,7 @@ kycRoutes.openapi(
     },
   }),
   async (c) => {
-    const { bvn } = c.req.valid("json");
+    const { bvn, bankAccountId } = c.req.valid("json");
     const userId = c.get("userId");
 
     const existing = await db
@@ -131,7 +133,14 @@ kycRoutes.openapi(
       }, 400);
     }
 
-    const result = await submitBvnUseCase.execute({ userId, bvn });
+    if (existing[0]?.bvnStatus === "PENDING" && existing[0]?.paystackCustomerCode) {
+      return c.json({
+        success: false as const,
+        error: "BVN verification is already in progress. Check /kyc/status shortly.",
+      }, 400);
+    }
+
+    const result = await submitBvnUseCase.execute({ userId, bvn, bankAccountId });
 
     if (!result.success) {
       return c.json({ success: false as const, error: result.error }, 400);

@@ -48,6 +48,12 @@ describe("Challenge", () => {
       expect(result.success).toBe(false);
     });
 
+    it("fails when challenge is waiting", () => {
+      const challenge = buildChallenge({ status: "WAITING" });
+      const result = challenge.join(randomUUID());
+      expect(result.success).toBe(false);
+    });
+
     it("fails when challenge is cancelled", () => {
       const challenge = buildChallenge({ status: "CANCELLED" });
       const result = challenge.join(randomUUID());
@@ -113,17 +119,19 @@ describe("Challenge", () => {
       });
     });
 
-    it("returns WAITING when only one side has declared", () => {
-      const result = challenge.declareWinner(creatorId, creatorId);
-      expect(result.success).toBe(true);
-    });
-
     it("returns SETTLED when both declare the same winner", () => {
       challenge.declareWinner(creatorId, creatorId);
       const result = challenge.declareWinner(opponentId, creatorId);
       expect(result.success).toBe(true);
       result.success ? console.log(result.value) : console.log(result.error);
       expect(challenge.status).toBe("SETTLED");
+    });
+
+    it("returns WAITING when only one participant declares a winner", () => {
+      const result = challenge.declareWinner(creatorId, creatorId);
+      expect(result.success).toBe(true);
+      result.success ? console.log(result.value) : console.log(result.error);
+      expect(challenge.status).toBe("WAITING");
     });
 
     it("returns DISPUTED when both declare different winners", () => {

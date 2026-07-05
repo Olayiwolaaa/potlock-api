@@ -19,6 +19,7 @@ export const Events = {
   CHALLENGE_WINNER_DECLARED: "challenge.winner_declared",
   CHALLENGE_SETTLED: "challenge.settled",
   CHALLENGE_DISPUTED: "challenge.disputed",
+  CHALLENGE_WAITING: "challenge.waiting",
 
   // Wallet
   WALLET_CREDITED: "wallet.credited",

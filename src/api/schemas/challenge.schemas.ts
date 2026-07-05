@@ -68,6 +68,7 @@ export const challengeListSchema = successResponse(
       z.object({
         id: z.string(),
         title: z.string(),
+        description: z.string().nullable(),
         platform: z.enum(["PS", "XBOX", "MOBILE", "PC"]),
         stakeKobo: z.number(),
         potKobo: z.number(),
@@ -100,7 +101,9 @@ export const publicChallengeListSchema = successResponse(
       z.object({
         id: z.string(),
         title: z.string(),
-        description: z.string().nullable(),
+        hasDescription: z.boolean().openapi({
+          description: "True if the creator set a description — content is hidden until someone joins.",
+        }),
         platform: z.enum(["PS", "XBOX", "MOBILE", "PC"]),
         stakeKobo: z.number(),
         potKobo: z.number(),

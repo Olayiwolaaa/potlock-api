@@ -3,11 +3,10 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { env } from "@config/env";
 import { PaystackAdapter } from "@infrastructure/payment/PaystackAdapter";
 import { WalletRepository } from "@infrastructure/db/repositories/WalletRepository";
-import { UserRepository } from "@infrastructure/db/repositories/UserRepository";
 import { FundWalletUseCase } from "@application/wallet/FundWalletUseCase";
 import { logger } from "@infrastructure/logger/logger";
 import { db } from "@infrastructure/db/client";
-import { walletTransactions } from "@infrastructure/db/schema";
+import { walletTransactions, kycProfiles } from "@infrastructure/db/schema";
 import { eq } from "drizzle-orm";
 
 const webhookRoutes = new Hono();
@@ -69,6 +68,14 @@ webhookRoutes.post("/paystack", async (c) => {
       await handleTransferFailed(event.data);
       break;
 
+    case "customeridentification.success":
+      await handleCustomerIdentificationSuccess(event.data);
+      break;
+
+    case "customeridentification.failed":
+      await handleCustomerIdentificationFailed(event.data);
+      break;
+
     default:
       // Acknowledge but ignore events we don't handle yet
       logger.info({ event: event.event }, "Unhandled webhook event");
@@ -115,6 +122,82 @@ async function handleChargeSuccess(data: {
   if (!result.success) {
     logger.error({ reference, error: result.error }, "Failed to fund wallet");
   }
+}
+
+async function handleCustomerIdentificationSuccess(data: {
+  customer_code: string;
+}) {
+  const { customer_code } = data;
+
+  const [profile] = await db
+    .select()
+    .from(kycProfiles)
+    .where(eq(kycProfiles.paystackCustomerCode, customer_code))
+    .limit(1);
+
+  if (!profile) {
+    logger.error(
+      { customer_code },
+      "CRITICAL: customeridentification.success for unknown Paystack customer — manual reconciliation required",
+    );
+    return;
+  }
+
+  if (profile.bvnStatus === "VERIFIED") {
+    logger.info({ customer_code }, "BVN identification already verified, skipping");
+    return;
+  }
+
+  // Don't downgrade a user who already reached a higher tier via address/full KYC
+  const tierRank = { TIER_0: 0, TIER_1: 1, TIER_2: 2, TIER_3: 3 } as const;
+  const nextTier = tierRank[profile.tier] >= tierRank.TIER_1 ? profile.tier : "TIER_1";
+
+  await db
+    .update(kycProfiles)
+    .set({
+      bvnStatus: "VERIFIED",
+      bvnFailureReason: null,
+      tier: nextTier,
+      updatedAt: new Date(),
+    })
+    .where(eq(kycProfiles.paystackCustomerCode, customer_code));
+
+  logger.info({ customer_code, userId: profile.userId }, "BVN verified via webhook");
+}
+
+async function handleCustomerIdentificationFailed(data: {
+  customer_code: string;
+  reason?: string;
+}) {
+  const { customer_code, reason } = data;
+
+  const [profile] = await db
+    .select()
+    .from(kycProfiles)
+    .where(eq(kycProfiles.paystackCustomerCode, customer_code))
+    .limit(1);
+
+  if (!profile) {
+    logger.error(
+      { customer_code },
+      "customeridentification.failed for unknown Paystack customer",
+    );
+    return;
+  }
+
+  await db
+    .update(kycProfiles)
+    .set({
+      bvnStatus: "FAILED",
+      bvnFailureReason: reason ?? "Verification failed",
+      updatedAt: new Date(),
+    })
+    .where(eq(kycProfiles.paystackCustomerCode, customer_code));
+
+  logger.warn(
+    { customer_code, userId: profile.userId, reason },
+    "BVN verification failed via webhook",
+  );
 }
 
 async function handleTransferSuccess(data: { reference: string }) {

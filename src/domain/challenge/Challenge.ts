@@ -6,6 +6,7 @@ export type ChallengeStatus =
   | "OPEN"
   | "LOCKED"
   | "SETTLED"
+  | "WAITING"
   | "DISPUTED"
   | "CANCELLED";
 
@@ -92,8 +93,8 @@ export class Challenge {
     return ok(undefined);
   }
 
-  declareWinner(declarerId: string, winnerId: string): Result<"SETTLED" | "DISPUTED", DomainError> {
-    if (this.props.status !== "LOCKED") {
+  declareWinner(declarerId: string, winnerId: string): Result<"SETTLED" | "DISPUTED" | "WAITING", DomainError> {
+    if (this.props.status !== "LOCKED" && this.props.status !== "WAITING") {
       return err(new DomainError("Challenge is not in progress", "CHALLENGE_NOT_LOCKED"));
     }
 
@@ -128,8 +129,9 @@ export class Challenge {
       }
     }
 
-    // Only one person declared so far — still locked, waiting
-    return ok("SETTLED"); // placeholder — we'll handle the "waiting" state properly
+    // Only one person declared so far — move to WAITING for the other party.
+    this.props.status = "WAITING";
+    return ok("WAITING");
   }
 
   toRecord() {

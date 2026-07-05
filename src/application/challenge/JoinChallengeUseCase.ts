@@ -6,6 +6,7 @@ import { db } from "@infrastructure/db/client";
 import { vaults, walletTransactions } from "@infrastructure/db/schema";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { logger } from "@infrastructure/logger/logger";
 import {
   pusher,
   Channels,
@@ -23,6 +24,11 @@ interface JoinChallengeOutput {
   opponentId: string;
 }
 
+export interface JoinChallengeError {
+  message: string;
+  code: string;
+}
+
 export class JoinChallengeUseCase {
   constructor(
     private readonly challengeRepo: IChallengeRepository,
@@ -31,28 +37,54 @@ export class JoinChallengeUseCase {
 
   async execute(
     input: JoinChallengeInput,
-  ): Promise<Result<JoinChallengeOutput>> {
+  ): Promise<Result<JoinChallengeOutput, JoinChallengeError>> {
     // 1. Resolve the link to a challenge
     const challenge = await this.challengeRepo.findBySlug(input.linkSlug);
-    if (!challenge) return err("Challenge not found");
+    if (!challenge) {
+      return err({ message: "Challenge not found", code: "NOT_FOUND" });
+    }
 
-    // 2. Attempt to join — domain enforces all rules
+    // 2. Run domain validation (expiry, self-join, already-locked-in-memory).
+    // This does NOT guarantee exclusivity under concurrency — that's what
+    // tryLockForJoin's DB-level WHERE clause is for, below. This step exists
+    // to reject obviously-invalid joins before we touch any money at all.
     const joinResult = challenge.join(input.opponentId);
-    if (!joinResult.success) return err(joinResult.error.message);
+    if (!joinResult.success) {
+      return err({ message: joinResult.error.message, code: joinResult.error.code });
+    }
 
     const stake = Money.fromKobo(challenge.stakeKobo);
-
-    // 3. Atomic debit — prevents double-spend if two opponents click join simultaneously
+    
     const wallet = await this.walletRepo.debitAtomic(
       input.opponentId,
       stake.kobo,
     );
     if (!wallet) {
-      return err("Insufficient wallet balance to join this challenge");
+      return err({
+        message: "Insufficient wallet balance to join this challenge",
+        code: "INSUFFICIENT_FUNDS",
+      });
     }
-
-    // 4. Save the updated challenge (now LOCKED with opponentId set)
-    await this.challengeRepo.save(challenge);
+    
+    const won = await this.challengeRepo.tryLockForJoin(
+      challenge.id,
+      input.opponentId,
+      challenge.potKobo,
+    );
+    if (!won) {
+      const refunded = await this.walletRepo.creditAtomic(input.opponentId, stake.kobo);
+      if (!refunded) {
+        
+        logger.error(
+          { challengeId: challenge.id, opponentId: input.opponentId, amountKobo: stake.kobo },
+          "CRITICAL: lost join race but failed to refund opponent's debited stake",
+        );
+      }
+      return err({
+        message: "This challenge was just taken by someone else.",
+        code: "CHALLENGE_NOT_OPEN",
+      });
+    }
 
     // 5. Update vault balance and lock it
     await db

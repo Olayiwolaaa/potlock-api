@@ -10,6 +10,7 @@ interface GetUserChallengesInput {
 export interface ChallengeListItem {
   id: string;
   title: string;
+  description: string | null;
   platform: "PS" | "XBOX" | "MOBILE" | "PC";
   stakeKobo: number;
   potKobo: number;

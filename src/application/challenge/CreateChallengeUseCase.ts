@@ -8,8 +8,6 @@ import { vaults, walletTransactions } from "@infrastructure/db/schema";
 import { randomUUID } from "crypto";
 import { nanoid } from "nanoid";
 import { CloudinaryAdapter } from "@infrastructure/storage/CloudinaryAdapter";
-import { redis } from "@infrastructure/cache/RedisClient";
-import { CacheKeys, CacheTTL } from "@infrastructure/cache/CacheKeys";
 
 interface CreateChallengeInput {
   creatorId: string;
