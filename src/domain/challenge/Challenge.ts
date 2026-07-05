@@ -6,6 +6,7 @@ export type ChallengeStatus =
   | "OPEN"
   | "LOCKED"
   | "SETTLED"
+  | "WAITING"
   | "DISPUTED"
   | "CANCELLED";
 
@@ -92,7 +93,7 @@ export class Challenge {
     return ok(undefined);
   }
 
-  declareWinner(declarerId: string, winnerId: string): Result<"SETTLED" | "DISPUTED", DomainError> {
+  declareWinner(declarerId: string, winnerId: string): Result<"SETTLED" | "DISPUTED" | "WAITING", DomainError> {
     if (this.props.status !== "LOCKED") {
       return err(new DomainError("Challenge is not in progress", "CHALLENGE_NOT_LOCKED"));
     }
@@ -128,8 +129,9 @@ export class Challenge {
       }
     }
 
-    // Only one person declared so far — still locked, waiting
-    return ok("SETTLED"); // placeholder — we'll handle the "waiting" state properly
+    // Only one person declared so far — status stays LOCKED, and
+    // SettleChallengeUseCase's WAITING branch no-ops without touching money.
+    return ok("WAITING");
   }
 
   toRecord() {

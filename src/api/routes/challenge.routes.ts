@@ -1,5 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { requireAuth } from "@api/middleware/auth";
+import { requireAuth, optionalAuth } from "@api/middleware/auth";
 import { ChallengeRepository } from "@infrastructure/db/repositories/ChallengeRepository";
 import { WalletRepository } from "@infrastructure/db/repositories/WalletRepository";
 import { CreateChallengeUseCase } from "@application/challenge/CreateChallengeUseCase";
@@ -63,6 +63,10 @@ challengeRoutes.openapi(
   },
 );
 
+// Public, but we still want to know who's asking (if anyone) so we can
+// decide whether to reveal the description below.
+challengeRoutes.use("/c/:slug", optionalAuth);
+
 challengeRoutes.openapi(
   createRoute({
     method: "get",
@@ -81,7 +85,13 @@ challengeRoutes.openapi(
               z.object({
                 id: z.string(),
                 title: z.string(),
-                description: z.string().nullable(),
+                description: z.string().nullable().openapi({
+                  description:
+                    "Only populated for the challenge's creator, or an opponent who has already joined. Everyone else gets null.",
+                }),
+                hasDescription: z.boolean().openapi({
+                  description: "True if a description exists, even when it's hidden from this viewer.",
+                }),
                 platform: z.enum(["PS", "XBOX", "MOBILE", "PC"]),
                 stakeKobo: z.number(),
                 potKobo: z.number(),
@@ -116,6 +126,7 @@ challengeRoutes.openapi(
   }),
   async (c) => {
     const { slug } = c.req.valid("param");
+    const viewerId = c.get("userId") as string | undefined;
     const result = await challengeRepo.findBySlugWithDetails(slug);
     if (!result) {
       return c.json({ success: false as const, error: "Challenge not found" }, 404);
@@ -123,13 +134,22 @@ challengeRoutes.openapi(
 
     const { challenge, creator, game } = result;
 
+    // Only the creator, or an opponent who has already joined, gets the
+    // actual text. A prospective opponent looking at an OPEN challenge
+    // hasn't committed anything yet, so opponentId is still null for them —
+    // this naturally excludes "about to accept" from "already accepted".
+    const isCreator = viewerId === challenge.creatorId;
+    const isJoinedOpponent = Boolean(challenge.opponentId) && viewerId === challenge.opponentId;
+    const canSeeDescription = isCreator || isJoinedOpponent;
+
     return c.json(
       {
         success: true as const,
         data: {
           id: challenge.id,
           title: challenge.title,
-          description: challenge.description,
+          description: canSeeDescription ? challenge.description : null,
+          hasDescription: Boolean(challenge.description),
           platform: challenge.platform,
           stakeKobo: challenge.stakeKobo,
           potKobo: challenge.potKobo,
@@ -222,7 +242,12 @@ challengeRoutes.openapi(
     const opponentId = c.get("userId");
 
     const result = await joinChallenge.execute({ opponentId, linkSlug: slug });
-    if (!result.success) return c.json({ success: false as const, error: result.error }, 400);
+    if (!result.success) {
+      return c.json(
+        { success: false as const, error: result.error.message, code: result.error.code },
+        400,
+      );
+    }
 
     return c.json({ success: true as const, data: result.value }, 200);
   },

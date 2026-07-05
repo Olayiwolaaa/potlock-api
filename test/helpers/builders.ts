@@ -51,7 +51,7 @@ export function buildChallenge(overrides: Partial<{
   platform: "PS" | "XBOX" | "MOBILE" | "PC";
   stakeKobo: number;
   potKobo: number;
-  status: "OPEN" | "LOCKED" | "SETTLED" | "DISPUTED" | "CANCELLED";
+  status: "OPEN" | "LOCKED" | "SETTLED" | "WAITING" | "DISPUTED" | "CANCELLED";
   linkSlug: string;
   title: string;
   description: string | null;
@@ -224,13 +224,28 @@ export class MockChallengeRepository implements IChallengeRepository {
     this.games.set(gameId, game);
   }
 
+  // Returns a fresh domain instance built from the same underlying data,
+  // not the same object reference. This matters: the real repository
+  // reconstructs a new Challenge from a fresh DB row on every read, so two
+  // "concurrent" callers each get their own independent instance. If this
+  // returned the same in-memory reference instead, one caller's `.join()`
+  // call would silently mutate the object the other caller is about to read,
+  // and the domain guard (not tryLockForJoin) would end up resolving the
+  // race — which would hide exactly the bug tryLockForJoin exists to fix.
+  private clone(challenge: Challenge): Challenge {
+    return Challenge.create(challenge.toRecord());
+  }
+
   async findById(id: string): Promise<Challenge | null> {
-    return this.store.get(id) ?? null;
+    const challenge = this.store.get(id);
+    return challenge ? this.clone(challenge) : null;
   }
 
   async findBySlug(slug: string): Promise<Challenge | null> {
     const id = this.bySlug.get(slug);
-    return id ? (this.store.get(id) ?? null) : null;
+    if (!id) return null;
+    const challenge = this.store.get(id);
+    return challenge ? this.clone(challenge) : null;
   }
 
   async findBySlugWithDetails(slug: string): Promise<ChallengeWithDetails | null> {
@@ -274,6 +289,22 @@ export class MockChallengeRepository implements IChallengeRepository {
     this.seed(challenge);
   }
 
+  // Mirrors the real repository's single conditional UPDATE ... WHERE
+  // status = 'OPEN': operates on the one authoritative stored instance
+  // (not the caller's clone), so whichever call reaches this method first
+  // wins, and every later call for the same challenge correctly fails.
+  async tryLockForJoin(
+    challengeId: string,
+    opponentId: string,
+    _potKobo: number,
+  ): Promise<boolean> {
+    const stored = this.store.get(challengeId);
+    if (!stored) return false;
+
+    const result = stored.join(opponentId);
+    return result.success;
+  }
+
   async findOpenChallenges(opts: {
     limit: number;
     offset: number;
@@ -296,7 +327,7 @@ export class MockChallengeRepository implements IChallengeRepository {
       return {
         id: c.id,
         title: c.title,
-        description: c.description,
+        hasDescription: Boolean(c.description),
         platform: c.platform,
         stakeKobo: c.stakeKobo,
         potKobo: c.potKobo,
@@ -329,6 +360,7 @@ export class MockChallengeRepository implements IChallengeRepository {
       return {
         id: c.id,
         title: c.title,
+        description: c.description,
         platform: c.platform,
         stakeKobo: c.stakeKobo,
         potKobo: c.potKobo,

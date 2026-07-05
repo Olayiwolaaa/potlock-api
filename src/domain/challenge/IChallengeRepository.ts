@@ -5,7 +5,12 @@ export type Platform = "PS" | "XBOX" | "MOBILE" | "PC";
 export interface OpenChallengeSummary {
   id: string;
   title: string;
-  description: string | null;
+  // No raw `description` here on purpose — this backs the public arena
+  // browse list (unauthenticated, bulk). By definition every row here is
+  // still OPEN, i.e. nobody has joined yet, so there is no legitimate
+  // viewer for the description at this stage. `hasDescription` lets the
+  // UI show a "rules attached" hint without leaking the content.
+  hasDescription: boolean;
   platform: Platform;
   stakeKobo: number;
   potKobo: number;
@@ -21,6 +26,11 @@ export interface OpenChallengeSummary {
 export interface UserChallengeSummary {
   id: string;
   title: string;
+  // Safe to always include here: this endpoint only ever returns challenges
+  // where the caller is the creator or an opponent who has already joined
+  // (opponentId is null until a join happens), so anyone seeing this row
+  // is entitled to see the description.
+  description: string | null;
   platform: Platform;
   stakeKobo: number;
   potKobo: number;
@@ -58,6 +68,20 @@ export interface IChallengeRepository {
   findByCreatorId(creatorId: string): Promise<Challenge[]>;
   create(challenge: Challenge): Promise<void>;
   save(challenge: Challenge): Promise<void>;
+  /**
+   * Atomically claims the OPEN slot on a challenge for `opponentId`.
+   * Only succeeds (returns true) if the challenge is still OPEN at the
+   * moment the UPDATE runs — the DB's WHERE clause is the source of truth,
+   * not any in-memory check. If two people accept the same challenge at
+   * the same instant, exactly one call returns true; the other returns
+   * false and the caller is expected to refund whatever was already
+   * debited rather than silently overwriting the winner's join.
+   */
+  tryLockForJoin(
+    challengeId: string,
+    opponentId: string,
+    potKobo: number,
+  ): Promise<boolean>;
   findOpenChallenges(opts: {
     limit: number;
     offset: number;

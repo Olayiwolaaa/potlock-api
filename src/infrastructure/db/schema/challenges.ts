@@ -15,6 +15,7 @@ export const challengeStatusEnum = pgEnum("challenge_status", [
   "LOCKED",
   "SETTLED",
   "DISPUTED",
+  "WAITING",
   "CANCELLED",
 ]);
 

@@ -1,4 +1,4 @@
-import { desc, and, eq, or, sql } from "drizzle-orm";
+import { desc, and, eq, or, sql, isNotNull } from "drizzle-orm";
 import { db } from "../client";
 import { challenges, games, users } from "../schema";
 import { Challenge, ChallengeStatus } from "@domain/challenge/Challenge";
@@ -154,6 +154,33 @@ export class ChallengeRepository implements IChallengeRepository {
     await redis.del(CacheKeys.challengeBySlug(record.linkSlug));
   }
 
+  // The WHERE clause (id + status='OPEN') is what actually prevents the
+  // join race condition — this must run as one UPDATE, not a read-then-write.
+  // If two requests race, the DB serializes the two UPDATEs; whichever runs
+  // second finds 0 matching rows (status is no longer 'OPEN') and gets back
+  // false instead of clobbering the first request's opponentId.
+  async tryLockForJoin(
+    challengeId: string,
+    opponentId: string,
+    potKobo: number,
+  ): Promise<boolean> {
+    const result = await db
+      .update(challenges)
+      .set({
+        opponentId,
+        potKobo,
+        status: "LOCKED",
+        updatedAt: new Date(),
+      })
+      .where(and(eq(challenges.id, challengeId), eq(challenges.status, "OPEN")))
+      .returning();
+
+    if (!result[0]) return false;
+
+    await redis.del(CacheKeys.challengeBySlug(result[0].linkSlug));
+    return true;
+  }
+
   async findOpenChallenges(opts: {
     limit: number;
     offset: number;
@@ -170,7 +197,10 @@ export class ChallengeRepository implements IChallengeRepository {
       .select({
         id: challenges.id,
         title: challenges.title,
-        description: challenges.description,
+        // Never select the raw column here — this backs the public,
+        // unauthenticated browse list. Compute a boolean in SQL so the
+        // description text itself never leaves the database for this query.
+        hasDescription: sql<boolean>`${isNotNull(challenges.description)} and ${challenges.description} != ''`,
         platform: challenges.platform,
         stakeKobo: challenges.stakeKobo,
         potKobo: challenges.potKobo,
@@ -240,6 +270,7 @@ export class ChallengeRepository implements IChallengeRepository {
       .select({
         id: challenges.id,
         title: challenges.title,
+        description: challenges.description,
         platform: challenges.platform,
         stakeKobo: challenges.stakeKobo,
         potKobo: challenges.potKobo,
@@ -277,6 +308,7 @@ export class ChallengeRepository implements IChallengeRepository {
       rows: rows.map((r) => ({
         id: r.id,
         title: r.title,
+        description: r.description,
         platform: r.platform as Platform,
         stakeKobo: Number(r.stakeKobo),
         potKobo: Number(r.potKobo),
