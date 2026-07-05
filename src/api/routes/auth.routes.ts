@@ -14,14 +14,16 @@ import {
   googleAuthResponseSchema,
   errorResponse,
 } from "@api/schemas/auth.schemas";
+import { ResendEmailService } from "@infrastructure/email/ResendEmailService";
 
 const userRepo = new UserRepository();
 const walletRepo = new WalletRepository();
 const tokenService = new TokenService();
+const emailService = new ResendEmailService();
 const googleOAuth = new GoogleOAuthService();
-const registerUseCase = new RegisterUseCase(userRepo, walletRepo, tokenService);
 const loginUseCase = new LoginUseCase(userRepo, tokenService);
 const googleLoginUseCase = new GoogleLoginUseCase(userRepo, walletRepo, tokenService, googleOAuth);
+const registerUseCase = new RegisterUseCase(userRepo, walletRepo, tokenService, emailService);
 
 const authRoutes = new OpenAPIHono();
 

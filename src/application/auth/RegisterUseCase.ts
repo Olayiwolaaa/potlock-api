@@ -4,6 +4,9 @@ import { User } from "@domain/user/User";
 import { TokenService } from "@infrastructure/auth/TokenService";
 import { Result, ok, err } from "@domain/shared/Result";
 import { randomUUID } from "crypto";
+import { IEmailService } from "@domain/shared/IEmailService";
+import { logger } from "@infrastructure/logger/logger";
+import { welcomeEmailTemplate } from "@infrastructure/email/templates";
 
 interface RegisterInput {
   email: string;
@@ -23,6 +26,7 @@ export class RegisterUseCase {
     private readonly userRepo: IUserRepository,
     private readonly walletRepo: IWalletRepository,
     private readonly tokenService: TokenService,
+    private readonly emailService: IEmailService
   ) {}
 
   async execute(input: RegisterInput): Promise<Result<RegisterOutput>> {
@@ -62,6 +66,15 @@ export class RegisterUseCase {
       passwordHash,
       displayName: input.displayName.trim(),
     });
+
+    // fire-and-forget — don't block signup on email delivery
+    this.emailService
+      .send({
+        to: user.email,
+        subject: "Welcome to Potlock",
+        html: welcomeEmailTemplate(user.displayName),
+      })
+      .catch((err) => logger.error({ err }, "Welcome email failed"));
 
     // 7. Automatically create a wallet for the new user
     // Every user gets a wallet — no separate step needed
