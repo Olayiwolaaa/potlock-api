@@ -15,3 +15,6 @@ process.env.CLOUDINARY_API_KEY = "test";
 process.env.CLOUDINARY_API_SECRET = "test";
 process.env.GOOGLE_CLIENT_ID = "test";
 process.env.GOOGLE_CLIENT_SECRET = "test";
+process.env.RESEND_API_KEY = "re_xxxxxxxxx";
+process.env.EMAIL_FROM = "test@example.com";
+process.env.FEEDBACK_TO_EMAIL = "feedback-test@example.com";
