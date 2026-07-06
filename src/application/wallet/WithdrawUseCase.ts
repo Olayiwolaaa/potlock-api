@@ -10,6 +10,8 @@ import { randomUUID } from "crypto";
 import { logger } from "@infrastructure/logger/logger";
 import { kycProfiles } from "@infrastructure/db/schema";
 import { getDailyLimit, KycTier } from "@domain/kyc/KycTier";
+import { Events } from "@infrastructure/realtime/PusherAdapter";
+import { notificationService } from "@infrastructure/realtime/NotificationService";
 
 interface WithdrawInput {
   userId: string;
@@ -140,6 +142,20 @@ export class WithdrawUseCase {
       { userId: input.userId, amountKobo: requestedAmount.kobo, reference },
       "Withdrawal initiated",
     );
+
+    await notificationService.notify({
+      userId: input.userId,
+      event: Events.WALLET_DEBITED,
+      title: "Withdrawal initiated",
+      message: `${netAmount.toString()} is on its way to ${bankAccount[0].bankName} ${bankAccount[0].accountNumber}.`,
+      data: {
+        reference,
+        amountKobo: requestedAmount.kobo,
+        feeKobo: fee.kobo,
+        netAmountKobo: netAmount.kobo,
+        purpose: "WITHDRAWAL",
+      },
+    });
 
     return ok({
       reference,

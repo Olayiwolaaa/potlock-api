@@ -14,6 +14,7 @@ import {
   Channels,
   Events,
 } from "@infrastructure/realtime/PusherAdapter";
+import { notificationService } from "@infrastructure/realtime/NotificationService";
 
 // A prediction is an array of match picks
 export interface MatchPrediction {
@@ -133,6 +134,16 @@ export class PlaceBetEntryUseCase {
       newEntryCount: existingEntries.length + 1,
       newPotKobo: Number(bet[0].potKobo) + entryFee.kobo,
       ts: Date.now(),
+    });
+
+    // Personal confirmation for the bettor themselves — the broadcast above
+    // is intentionally anonymized, this one is just for them.
+    await notificationService.notify({
+      userId: input.bettorId,
+      event: Events.BET_ENTRY_PLACED,
+      title: "Bet placed",
+      message: `Your ${entryFee.toString()} entry has been placed.`,
+      data: { betId: input.betId, entryId, entryFeeKobo: entryFee.kobo },
     });
 
     return ok({ entryId });

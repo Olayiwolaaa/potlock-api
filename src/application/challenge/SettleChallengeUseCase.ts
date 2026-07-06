@@ -1,6 +1,7 @@
 import { IChallengeRepository } from "@domain/challenge/IChallengeRepository";
 import { IWalletRepository } from "@domain/wallet/IWalletRepository";
 import { FeeCalculator } from "@domain/settlement/FeeCalculator";
+import { Money } from "@domain/shared/Money";
 import { Result, ok, err } from "@domain/shared/Result";
 import { db } from "@infrastructure/db/client";
 import { vaults, walletTransactions, users } from "@infrastructure/db/schema";
@@ -12,6 +13,7 @@ import {
   Channels,
   Events,
 } from "@infrastructure/realtime/PusherAdapter";
+import { notificationService } from "@infrastructure/realtime/NotificationService";
 
 interface SettleInput {
   challengeId: string;
@@ -104,21 +106,39 @@ export class SettleChallengeUseCase {
           .where(eq(users.id, loserId)),
       ]);
 
-      await pusher.emitToMany(
-        [
-          Channels.challenge(challenge.id),
-          Channels.user(input.winnerId),
-          Channels.user(loserId),
-        ],
-        Events.CHALLENGE_SETTLED,
-        {
-          challengeId: challenge.id,
-          winnerId: input.winnerId,
-          winnerPayout: fees.winnerPayout.kobo,
-          platformFee: fees.platformFee.kobo,
-          ts: Date.now(),
-        },
-      );
+      await pusher.emit(Channels.challenge(challenge.id), Events.CHALLENGE_SETTLED, {
+        challengeId: challenge.id,
+        winnerId: input.winnerId,
+        winnerPayout: fees.winnerPayout.kobo,
+        platformFee: fees.platformFee.kobo,
+        ts: Date.now(),
+      });
+
+      await Promise.all([
+        notificationService.notify({
+          userId: input.winnerId,
+          event: Events.CHALLENGE_SETTLED,
+          title: "You won! 🏆",
+          message: `You won the challenge "${challenge.title}". ${Money.fromKobo(fees.winnerPayout.kobo).toString()} has been credited.`,
+          data: {
+            challengeId: challenge.id,
+            winnerId: input.winnerId,
+            winnerPayout: fees.winnerPayout.kobo,
+            outcome: "WON",
+          },
+        }),
+        notificationService.notify({
+          userId: loserId,
+          event: Events.CHALLENGE_SETTLED,
+          title: "Challenge settled",
+          message: `You lost the challenge "${challenge.title}".`,
+          data: {
+            challengeId: challenge.id,
+            winnerId: input.winnerId,
+            outcome: "LOST",
+          },
+        }),
+      ]);
 
       logger.info(
         { challengeId: challenge.id, winnerId: input.winnerId },
@@ -147,6 +167,17 @@ export class SettleChallengeUseCase {
             "Declarations conflict. The vault is frozen pending resolution.",
           ts: Date.now(),
         },
+      );
+
+      const participantIds = [challenge.creatorId, challenge.opponentId].filter(
+        (id): id is string => Boolean(id),
+      );
+      await notificationService.notifyMany(
+        participantIds,
+        Events.CHALLENGE_DISPUTED,
+        () => "Challenge disputed",
+        () => `Declarations conflict on "${challenge.title}". The vault is frozen pending resolution.`,
+        { challengeId: challenge.id },
       );
 
       logger.warn({ challengeId: challenge.id }, "Challenge disputed");

@@ -5,11 +5,8 @@ import { db } from "@infrastructure/db/client";
 import { walletTransactions } from "@infrastructure/db/schema";
 import { eq } from "drizzle-orm";
 import { logger } from "@infrastructure/logger/logger";
-import {
-  pusher,
-  Channels,
-  Events,
-} from "@infrastructure/realtime/PusherAdapter";
+import { Events } from "@infrastructure/realtime/PusherAdapter";
+import { notificationService } from "@infrastructure/realtime/NotificationService";
 
 interface FundWalletInput {
   userId: string;
@@ -57,12 +54,12 @@ export class FundWalletUseCase {
       note: `Wallet funded via Paystack`,
     });
 
-    await pusher.emit(Channels.user(input.userId), Events.WALLET_CREDITED, {
-      amountKobo,
-      newBalanceKobo: wallet.balance.kobo,
-      purpose: "WALLET_FUNDING",
+    await notificationService.notify({
+      userId,
+      event: Events.WALLET_CREDITED,
+      title: "Wallet funded",
       message: `Your wallet has been credited ${Money.fromKobo(amountKobo).toString()}`,
-      ts: Date.now(),
+      data: { amountKobo, newBalanceKobo: wallet.balance.kobo, purpose: "WALLET_FUNDING" },
     });
 
     logger.info(

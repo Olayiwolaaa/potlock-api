@@ -7,11 +7,8 @@ import { vaults, walletTransactions } from "@infrastructure/db/schema";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { logger } from "@infrastructure/logger/logger";
-import {
-  pusher,
-  Channels,
-  Events,
-} from "@infrastructure/realtime/PusherAdapter";
+import { notificationService } from "@infrastructure/realtime/NotificationService";
+import { Events } from "@infrastructure/realtime/PusherAdapter";
 
 interface CancelChallengeInput {
   challengeId: string;
@@ -63,16 +60,13 @@ export class CancelChallengeUseCase {
       note: `Refund: cancelled challenge "${challenge.title}"`,
     });
 
-    await pusher.emit(
-      Channels.user(challenge.creatorId),
-      Events.CHALLENGE_CANCELLED,
-      {
-        challengeId: challenge.id,
-        refundedKobo: stake.kobo,
-        message: "Challenge cancelled. Your stake has been refunded.",
-        ts: Date.now(),
-      },
-    );
+    await notificationService.notify({
+      userId: challenge.creatorId,
+      event: Events.CHALLENGE_CANCELLED,
+      title: "Challenge cancelled",
+      message: "Challenge cancelled. Your stake has been refunded.",
+      data: { challengeId: challenge.id, refundedKobo: stake.kobo },
+    });
 
     logger.info(
       { challengeId: challenge.id },

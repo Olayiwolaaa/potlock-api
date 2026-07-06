@@ -12,6 +12,7 @@ import {
   Channels,
   Events,
 } from "@infrastructure/realtime/PusherAdapter";
+import { notificationService } from "@infrastructure/realtime/NotificationService";
 
 interface JoinChallengeInput {
   opponentId: string;
@@ -108,21 +109,29 @@ export class JoinChallengeUseCase {
       note: `Stake locked for challenge: ${challenge.title}`,
     });
 
-    await pusher.emitToMany(
-      [
-        Channels.challenge(challenge.id),
-        Channels.user(challenge.creatorId),
-      ],
-      Events.CHALLENGE_JOINED,
-      {
+    // Live broadcast for anyone actively watching the challenge page right now
+    await pusher.emit(Channels.challenge(challenge.id), Events.CHALLENGE_JOINED, {
+      challengeId: challenge.id,
+      opponentId: input.opponentId,
+      potKobo: challenge.potKobo,
+      status: "LOCKED",
+      message: "An opponent has joined. The challenge is now locked.",
+      ts: Date.now(),
+    });
+
+    // Personal, persisted notification for the creator (bell + toast)
+    await notificationService.notify({
+      userId: challenge.creatorId,
+      event: Events.CHALLENGE_JOINED,
+      title: "Challenge accepted",
+      message: "An opponent has joined. The challenge is now locked.",
+      data: {
         challengeId: challenge.id,
         opponentId: input.opponentId,
         potKobo: challenge.potKobo,
         status: "LOCKED",
-        message: "An opponent has joined. The challenge is now locked.",
-        ts: Date.now(),
       },
-    );
+    });
 
     return ok({
       challengeId: challenge.id,
