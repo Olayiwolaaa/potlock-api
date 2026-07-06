@@ -122,4 +122,10 @@ export const publicChallengeListSchema = successResponse(
   }),
 ).openapi("PublicChallengeList");
 
+export const cancelResponseSchema = successResponse(
+  z.object({
+    challengeId: z.uuid(),
+  }),
+).openapi("CancelResponse");
+
 export { errorResponse };
