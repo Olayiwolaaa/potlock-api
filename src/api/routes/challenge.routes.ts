@@ -11,12 +11,14 @@ import {
   challengeResponseSchema,
   settleResponseSchema,
   publicChallengeListSchema,
+  cancelResponseSchema,
 } from "@api/schemas/challenge.schemas";
 import { AppEnv } from "@api/types";
 import { successResponse, errorResponse } from "@api/schemas/common.schemas";
 import { GetUserChallengesUseCase } from "@application/challenge/GetUserChallengesUseCase";
 import { challengeListSchema } from "@api/schemas/challenge.schemas";
 import { paginationQuery } from "@api/schemas/wallet.schemas";
+import { CancelChallengeUseCase } from "@src/application/challenge/CancelChallengeUseCase";
 
 const challengeRepo = new ChallengeRepository();
 const getUserChallenges = new GetUserChallengesUseCase(challengeRepo);
@@ -250,6 +252,42 @@ challengeRoutes.openapi(
     }
 
     return c.json({ success: true as const, data: result.value }, 200);
+  },
+);
+
+const cancelChallenge = new CancelChallengeUseCase(challengeRepo, walletRepo);
+
+// --- Cancel Challenge ---
+challengeRoutes.openapi(
+  createRoute({
+    method: "post",
+    path: "/{id}/cancel",
+    tags: ["Challenges"],
+    summary: "Cancel an open challenge",
+    description: "Only the creator can cancel, and only while the challenge is still OPEN. Stake is refunded.",
+    security: [{ bearerAuth: [] }],
+    request: {
+      params: z.object({ id: z.string().uuid() }),
+    },
+    responses: {
+      200: {
+        content: { "application/json": { schema: cancelResponseSchema } },
+        description: "Challenge cancelled and refunded",
+      },
+      400: {
+        content: { "application/json": { schema: errorResponse } },
+        description: "Cannot cancel",
+      },
+    },
+  }),
+  async (c) => {
+    const { id } = c.req.valid("param");
+    const requesterId = c.get("userId");
+
+    const result = await cancelChallenge.execute({ challengeId: id, requesterId });
+    if (!result.success) return c.json({ success: false as const, error: result.error }, 400);
+
+    return c.json({ success: true as const, data: { challengeId: id } }, 200);
   },
 );
 
