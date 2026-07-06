@@ -14,6 +14,7 @@ import {
   Channels,
   Events,
 } from "@infrastructure/realtime/PusherAdapter";
+import { notificationService } from "@infrastructure/realtime/NotificationService";
 
 interface RecordMatchResultInput {
   tournamentId: string;
@@ -85,6 +86,20 @@ export class RecordMatchResultUseCase {
       },
     );
 
+    const matchPlayerIds = [match[0].player1Id, match[0].player2Id].filter(
+      (id): id is string => Boolean(id),
+    );
+    await notificationService.notifyMany(
+      matchPlayerIds,
+      Events.MATCH_RESULT_RECORDED,
+      (playerId) => (playerId === input.winnerId ? "Match won! 🏆" : "Match result recorded"),
+      (playerId) =>
+        playerId === input.winnerId
+          ? "You won your tournament match and advance to the next round."
+          : "Your tournament match result has been recorded.",
+      { tournamentId: input.tournamentId, matchId: input.matchId, winnerId: input.winnerId },
+    );
+
     // Check if there are more matches in this round
     const nextRoundInfo = BracketGenerator.getNextRoundMatch(
       match[0].round,
@@ -135,6 +150,14 @@ export class RecordMatchResultUseCase {
             round: nextRoundInfo.round,
             ts: Date.now(),
           },
+        );
+
+        await notificationService.notifyMany(
+          [input.winnerId, paired.winnerId],
+          Events.NEXT_MATCH_CREATED,
+          () => "Next match ready",
+          () => `Your round ${nextRoundInfo.round} tournament match is ready.`,
+          { tournamentId: input.tournamentId, nextMatchId, round: nextRoundInfo.round },
         );
       }
 

@@ -16,6 +16,7 @@ import {
   Channels,
   Events,
 } from "@infrastructure/realtime/PusherAdapter";
+import { notificationService } from "@infrastructure/realtime/NotificationService";
 
 interface SettleBetInput {
   betId: string;
@@ -149,6 +150,14 @@ export class SettleBetUseCase {
       ts: Date.now(),
     });
 
+    await notificationService.notifyMany(
+      entries.map((e) => e.bettorId),
+      Events.BET_REFUNDED,
+      () => "Bet refunded",
+      () => `Your bet was refunded (${reason}). ${refundAmount.toString()} has been credited back.`,
+      { betId: bet.id, reason, refundAmountKobo: refundAmount.kobo },
+    );
+
     logger.info({ betId: bet.id, reason }, "Bet refunded");
     return ok({ outcome: "REFUNDED", winnersCount: 0 });
   }
@@ -245,7 +254,24 @@ export class SettleBetUseCase {
       perWinnerKobo,
       ts: Date.now(),
     });
-    
+
+    await Promise.all([
+      notificationService.notifyMany(
+        winnerEntries.map((e) => e.bettorId),
+        Events.BET_SETTLED,
+        () => "You won your bet! 🏆",
+        () => `${perWinner.toString()} has been credited to your wallet.`,
+        { betId: bet.id, outcome, perWinnerKobo, result: "WON" },
+      ),
+      notificationService.notifyMany(
+        allEntries.filter((e) => !winnerIds.has(e.id)).map((e) => e.bettorId),
+        Events.BET_SETTLED,
+        () => "Bet settled",
+        () => "Your bet has been settled — this round didn't go your way.",
+        { betId: bet.id, outcome, result: "LOST" },
+      ),
+    ]);
+
     logger.info(
       { betId: bet.id, winnersCount: winnerEntries.length },
       "Bet settled",

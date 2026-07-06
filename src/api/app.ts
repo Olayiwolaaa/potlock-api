@@ -22,6 +22,7 @@ import { pusherRoutes } from "@api/routes/pusher.routes";
 import { userRoutes } from "@api/routes/user.routes";
 import { gameRoutes } from "@api/routes/game.routes";
 import { feedbackRoutes } from "@api/routes/feedback.routes";
+import { notificationRoutes } from "@api/routes/notification.routes";
 
 export function createApp() {
   const app = new OpenAPIHono();
@@ -67,6 +68,7 @@ export function createApp() {
   app.route("/api/v1/bets", betRoutes);
 
   app.route("/api/v1/feedback", feedbackRoutes);
+  app.route("/api/v1/notifications", notificationRoutes);
 
   app.route("/pusher", pusherRoutes);
 
@@ -92,6 +94,7 @@ export function createApp() {
       { name: "Auth", description: "Registration and login" },
       { name: "Wallet", description: "Funding, withdrawals, history" },
       { name: "Challenges", description: "Create, join, settle" },
+      { name: "Notifications", description: "Personal notification bell/history" },
     ],
   });
 
