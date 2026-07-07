@@ -11,3 +11,4 @@ export * from "./games";
 export * from "./game_requests";
 export * from "./feedback";
 export * from "./notifications";
+export * from "./dispute_evidence";

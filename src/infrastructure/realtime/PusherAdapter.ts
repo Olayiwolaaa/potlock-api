@@ -20,6 +20,7 @@ export const Events = {
   CHALLENGE_SETTLED: "challenge.settled",
   CHALLENGE_DISPUTED: "challenge.disputed",
   CHALLENGE_WAITING: "challenge.waiting",
+  CHALLENGE_DISPUTE_EVIDENCE_SUBMITTED: "challenge.dispute_evidence_submitted",
 
   // Wallet
   WALLET_CREDITED: "wallet.credited",

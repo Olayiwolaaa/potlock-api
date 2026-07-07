@@ -1,10 +1,15 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { requireAuth, optionalAuth } from "@api/middleware/auth";
+import { requireAuth, optionalAuth, requireAdmin } from "@api/middleware/auth";
 import { ChallengeRepository } from "@infrastructure/db/repositories/ChallengeRepository";
 import { WalletRepository } from "@infrastructure/db/repositories/WalletRepository";
+import { DisputeEvidenceRepository } from "@infrastructure/db/repositories/DisputeEvidenceRepository";
+import { CloudinaryAdapter, DISPUTE_MEDIA_LIMITS } from "@infrastructure/storage/CloudinaryAdapter";
 import { CreateChallengeUseCase } from "@application/challenge/CreateChallengeUseCase";
 import { JoinChallengeUseCase } from "@application/challenge/JoinChallengeUseCase";
 import { SettleChallengeUseCase } from "@application/challenge/SettleChallengeUseCase";
+import { SubmitDisputeEvidenceUseCase } from "@application/challenge/SubmitDisputeEvidenceUseCase";
+import { ListDisputeEvidenceUseCase } from "@application/challenge/ListDisputeEvidenceUseCase";
+import { ListDisputedChallengesUseCase } from "@application/challenge/ListDisputedChallengesUseCase";
 import {
   createChallengeBodySchema,
   declareWinnerBodySchema,
@@ -12,6 +17,9 @@ import {
   settleResponseSchema,
   publicChallengeListSchema,
   cancelResponseSchema,
+  submitDisputeEvidenceResponseSchema,
+  listDisputeEvidenceResponseSchema,
+  listDisputedChallengesResponseSchema,
 } from "@api/schemas/challenge.schemas";
 import { AppEnv } from "@api/types";
 import { successResponse, errorResponse } from "@api/schemas/common.schemas";
@@ -19,13 +27,21 @@ import { GetUserChallengesUseCase } from "@application/challenge/GetUserChalleng
 import { challengeListSchema } from "@api/schemas/challenge.schemas";
 import { paginationQuery } from "@api/schemas/wallet.schemas";
 import { CancelChallengeUseCase } from "@src/application/challenge/CancelChallengeUseCase";
+import { db } from "@infrastructure/db/client";
+import { users } from "@infrastructure/db/schema";
+import { eq } from "drizzle-orm";
 
 const challengeRepo = new ChallengeRepository();
 const getUserChallenges = new GetUserChallengesUseCase(challengeRepo);
 const walletRepo = new WalletRepository();
+const storage = new CloudinaryAdapter();
+const disputeEvidenceRepo = new DisputeEvidenceRepository();
 const createChallenge = new CreateChallengeUseCase(challengeRepo, walletRepo);
 const joinChallenge = new JoinChallengeUseCase(challengeRepo, walletRepo);
 const settleChallenge = new SettleChallengeUseCase(challengeRepo, walletRepo);
+const submitDisputeEvidence = new SubmitDisputeEvidenceUseCase(challengeRepo, storage, disputeEvidenceRepo);
+const listDisputeEvidence = new ListDisputeEvidenceUseCase(challengeRepo, disputeEvidenceRepo);
+const listDisputedChallenges = new ListDisputedChallengesUseCase(disputeEvidenceRepo);
 const challengeRoutes = new OpenAPIHono<AppEnv>();
 
 // --- List Open Challenges (public) ---
@@ -356,6 +372,152 @@ challengeRoutes.openapi(
     const { limit, offset } = c.req.valid("query");
 
     const result = await getUserChallenges.execute({ userId, limit, offset });
+    if (!result.success) return c.json({ success: false as const, error: result.error }, 400);
+
+    return c.json({ success: true as const, data: result.value }, 200);
+  },
+);
+
+// --- Submit Dispute Evidence ---
+challengeRoutes.openapi(
+  createRoute({
+    method: "post",
+    path: "/{id}/dispute/evidence",
+    tags: ["Challenges"],
+    summary: "Upload evidence for a disputed challenge",
+    description:
+      `Only the two participants can call this, and only while the challenge is DISPUTED. ` +
+      `Send as multipart/form-data with one or more files under the "media" field ` +
+      `(JPEG/PNG/WebP up to ${DISPUTE_MEDIA_LIMITS.MAX_IMAGE_BYTES / (1024 * 1024)}MB, ` +
+      `or MP4/MOV/WebM up to ${DISPUTE_MEDIA_LIMITS.MAX_VIDEO_BYTES / (1024 * 1024)}MB, ` +
+      `max ${DISPUTE_MEDIA_LIMITS.MAX_FILES_PER_SUBMISSION} files per request). ` +
+      `Files are optimized/compressed on upload via Cloudinary.`,
+    security: [{ bearerAuth: [] }],
+    request: {
+      params: z.object({ id: z.string().uuid() }),
+      body: {
+        content: {
+          "multipart/form-data": {
+            schema: z.object({
+              media: z.union([
+                z.string().openapi({ type: "string", format: "binary" }),
+                z.array(z.string().openapi({ type: "string", format: "binary" })),
+              ]).openapi({ description: "One or more screenshot/video files" }),
+              note: z.string().max(300).optional(),
+            }),
+          },
+        },
+        required: true,
+      },
+    },
+    responses: {
+      201: {
+        content: { "application/json": { schema: submitDisputeEvidenceResponseSchema } },
+        description: "Evidence uploaded",
+      },
+      400: {
+        content: { "application/json": { schema: errorResponse } },
+        description: "Invalid upload or challenge not disputed",
+      },
+    },
+  }),
+  async (c) => {
+    const { id } = c.req.valid("param");
+    const userId = c.get("userId");
+
+    const formData = await c.req.formData();
+    const mediaFiles = formData.getAll("media").filter((f): f is File => f instanceof File);
+    const note = (formData.get("note") as string | null) ?? undefined;
+
+    if (mediaFiles.length === 0) {
+      return c.json({ success: false as const, error: "Attach at least one screenshot or video" }, 400);
+    }
+
+    const files = await Promise.all(
+      mediaFiles.map(async (file) => ({
+        buffer: Buffer.from(await file.arrayBuffer()),
+        mimeType: file.type,
+      })),
+    );
+
+    const result = await submitDisputeEvidence.execute({ challengeId: id, userId, files, note });
+    if (!result.success) return c.json({ success: false as const, error: result.error }, 400);
+
+    return c.json({ success: true as const, data: result.value }, 201);
+  },
+);
+
+// --- List Dispute Evidence (participants + admin) ---
+challengeRoutes.openapi(
+  createRoute({
+    method: "get",
+    path: "/{id}/dispute/evidence",
+    tags: ["Challenges"],
+    summary: "List evidence submitted for a disputed challenge",
+    description: "Visible to the two participants and to admins.",
+    security: [{ bearerAuth: [] }],
+    request: {
+      params: z.object({ id: z.string().uuid() }),
+    },
+    responses: {
+      200: {
+        content: { "application/json": { schema: listDisputeEvidenceResponseSchema } },
+        description: "Evidence list",
+      },
+      400: {
+        content: { "application/json": { schema: errorResponse } },
+        description: "Not found or not authorized",
+      },
+    },
+  }),
+  async (c) => {
+    const { id } = c.req.valid("param");
+    const userId = c.get("userId");
+
+    const adminRows = await db
+      .select({ role: users.role })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    const isAdmin = adminRows[0]?.role === "admin";
+
+    const result = await listDisputeEvidence.execute({ challengeId: id, requesterId: userId, isAdmin });
+    if (!result.success) return c.json({ success: false as const, error: result.error }, 400);
+
+    return c.json({ success: true as const, data: result.value }, 200);
+  },
+);
+
+// --- List Disputed Challenges (admin) ---
+challengeRoutes.openapi(
+  createRoute({
+    method: "get",
+    path: "/disputed",
+    tags: ["Challenges"],
+    summary: "List disputed challenges (admin)",
+    description: "Every currently DISPUTED challenge, with participants and evidence counts.",
+    security: [{ bearerAuth: [] }],
+    request: { query: paginationQuery },
+    responses: {
+      200: {
+        content: { "application/json": { schema: listDisputedChallengesResponseSchema } },
+        description: "Disputed challenges",
+      },
+      400: {
+        content: { "application/json": { schema: errorResponse } },
+        description: "Bad request",
+      },
+      403: {
+        content: { "application/json": { schema: errorResponse } },
+        description: "Admin only",
+      },
+    },
+  }),
+  async (c) => {
+    await requireAdmin(c);
+
+    const { limit, offset } = c.req.valid("query");
+    const result = await listDisputedChallenges.execute({ limit, offset });
     if (!result.success) return c.json({ success: false as const, error: result.error }, 400);
 
     return c.json({ success: true as const, data: result.value }, 200);

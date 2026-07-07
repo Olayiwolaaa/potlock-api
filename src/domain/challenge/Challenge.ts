@@ -62,6 +62,10 @@ export class Challenge {
     return this.props.opponentId !== null;
   }
 
+  isParticipant(userId: string): boolean {
+    return userId === this.props.creatorId || userId === this.props.opponentId;
+  }
+
   // --- State Transitions ---
   join(opponentId: string): Result<void, DomainError> {
     if (this.props.status !== "OPEN") {

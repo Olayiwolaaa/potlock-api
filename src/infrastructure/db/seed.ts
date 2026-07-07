@@ -8,6 +8,12 @@ import { randomUUID } from "crypto";
 
 const GAME_SEEDS = [
     {
+        name: "eFootball 26",
+        slug: "efootball-26",
+        description: "The world's biggest football game. 1v1 matches on Mobile.",
+        imageSource: "https://wallpaperaccess.com/full/25762104.jpg",
+    },
+    {
         name: "EA FC 26",
         slug: "ea-fc-26",
         description: "The world's biggest football game. 1v1 matches on PS5, Xbox, PC and Mobile.",
