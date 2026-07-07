@@ -27,8 +27,11 @@ const profileSchema = z.object({
     role: z.enum(["user", "admin"]),
     profileImageUrl: z.string().nullable(),
     isVerified: z.boolean(),
+    wins: z.number(),
+    losses: z.number(),
   }),
 });
+
 
 // ── GET /users/me ─────────────────────────────────────────────────────────────
 userRoutes.openapi(
@@ -78,6 +81,8 @@ userRoutes.openapi(
         role: profile.role,
         profileImageUrl: profile.profileImageUrl,
         isVerified: profile.isVerified,
+        wins: profile.wins,
+        losses: profile.losses,
       },
     }, 200);
   },

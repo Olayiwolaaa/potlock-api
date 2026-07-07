@@ -16,6 +16,8 @@ export class UserRepository implements IUserRepository {
       createdAt: record.createdAt,
       profileImageUrl: record.profileImageUrl,
       googleId: record.googleId,
+      wins: record.wins,
+      losses: record.losses,
     });
   }
 
