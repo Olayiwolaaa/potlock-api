@@ -26,10 +26,6 @@ export interface OpenChallengeSummary {
 export interface UserChallengeSummary {
   id: string;
   title: string;
-  // Safe to always include here: this endpoint only ever returns challenges
-  // where the caller is the creator or an opponent who has already joined
-  // (opponentId is null until a join happens), so anyone seeing this row
-  // is entitled to see the description.
   description: string | null;
   platform: Platform;
   stakeKobo: number;
@@ -43,6 +39,12 @@ export interface UserChallengeSummary {
   createdAt: string;
   game: { name: string; imageUrl: string | null };
   creator: { displayName: string; isVerified: boolean; wins: number; losses: number };
+  // Real, persisted per-viewer report state — replaces the frontend's
+  // previous hardcoded `myReport: null`. Null means this viewer hasn't
+  // declared a result yet for this challenge.
+  myReport: "WON" | "LOST" | null;
+  // Only meaningful once status === "SETTLED" (both sides agreed).
+  winnerId: string | null;
 }
 
 export interface ChallengeWithDetails {

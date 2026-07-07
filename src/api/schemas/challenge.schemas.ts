@@ -89,6 +89,8 @@ export const challengeListSchema = successResponse(
           wins: z.number(),
           losses: z.number(),
         }),
+        myReport: z.enum(["WON", "LOST"]).nullable(),
+        winnerId: z.string().nullable(),
       }),
     ),
     total: z.number(),
