@@ -14,6 +14,8 @@ export class User {
     public readonly profileImageUrl: string | null,
     public readonly profileImagePublicId: string | null,
     public readonly googleId: string | null,
+    public readonly wins: number,
+    public readonly losses: number,
   ) {}
 
   static create(params: {
@@ -28,6 +30,8 @@ export class User {
     profileImageUrl?: string | null;
     profileImagePublicId?: string | null;
     googleId?: string | null;
+    wins?: number;
+    losses?: number;
   }): User {
     return new User(
       params.id,
@@ -41,6 +45,8 @@ export class User {
       params.profileImageUrl ?? null,
       params.profileImagePublicId ?? null,
       params.googleId ?? null,
+      params.wins ?? 0,
+      params.losses ?? 0,
     );
   }
 
