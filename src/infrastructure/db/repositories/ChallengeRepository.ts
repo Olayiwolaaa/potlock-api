@@ -278,6 +278,8 @@ export class ChallengeRepository implements IChallengeRepository {
         linkSlug: challenges.linkSlug,
         creatorId: challenges.creatorId,
         opponentId: challenges.opponentId,
+        declaredWinnerId: challenges.declaredWinnerId,
+        opponentDeclaredWinnerId: challenges.opponentDeclaredWinnerId,
         expiresAt: challenges.expiresAt,
         createdAt: challenges.createdAt,
         gameName: games.name,
@@ -305,33 +307,53 @@ export class ChallengeRepository implements IChallengeRepository {
     ]);
 
     return {
-      rows: rows.map((r) => ({
-        id: r.id,
-        title: r.title,
-        description: r.description,
-        platform: r.platform as Platform,
-        stakeKobo: Number(r.stakeKobo),
-        potKobo: Number(r.potKobo),
-        status: r.status,
-        linkSlug: r.linkSlug,
-        role: (r.creatorId === userId ? "CREATOR" : "OPPONENT") as
+      rows: rows.map((r) => {
+        const role = (r.creatorId === userId ? "CREATOR" : "OPPONENT") as
           | "CREATOR"
-          | "OPPONENT",
-        creatorId: r.creatorId,
-        opponentId: r.opponentId,
-        expiresAt: r.expiresAt.toISOString(),
-        createdAt: r.createdAt.toISOString(),
-        game: {
-          name: r.gameName ?? "Unknown Game",
-          imageUrl: r.gameImageUrl ?? null,
-        },
-        creator: {
-          displayName: r.creatorDisplayName ?? "Player",
-          isVerified: r.creatorIsVerified ?? false,
-          wins: r.creatorWins ?? 0,
-          losses: r.creatorLosses ?? 0,
-        },
-      })),
+          | "OPPONENT";
+
+        // Whichever declaration column belongs to *this viewer*, based on
+        // their role in this specific challenge — not a client-side flag.
+        const myDeclaredWinnerId =
+          role === "CREATOR" ? r.declaredWinnerId : r.opponentDeclaredWinnerId;
+
+        const myReport: "WON" | "LOST" | null =
+          myDeclaredWinnerId === null
+            ? null
+            : myDeclaredWinnerId === userId
+              ? "WON"
+              : "LOST";
+
+        return {
+          id: r.id,
+          title: r.title,
+          description: r.description,
+          platform: r.platform as Platform,
+          stakeKobo: Number(r.stakeKobo),
+          potKobo: Number(r.potKobo),
+          status: r.status,
+          linkSlug: r.linkSlug,
+          role,
+          creatorId: r.creatorId,
+          opponentId: r.opponentId,
+          expiresAt: r.expiresAt.toISOString(),
+          createdAt: r.createdAt.toISOString(),
+          game: {
+            name: r.gameName ?? "Unknown Game",
+            imageUrl: r.gameImageUrl ?? null,
+          },
+          creator: {
+            displayName: r.creatorDisplayName ?? "Player",
+            isVerified: r.creatorIsVerified ?? false,
+            wins: r.creatorWins ?? 0,
+            losses: r.creatorLosses ?? 0,
+          },
+          myReport,
+          // Both declarations only ever agree once, at settlement — safe
+          // to surface either column as "the" winner once SETTLED.
+          winnerId: r.status === "SETTLED" ? r.declaredWinnerId : null,
+        };
+      }),
       total: Number(countResult[0]?.count ?? 0),
     };
   }

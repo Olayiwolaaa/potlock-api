@@ -378,6 +378,8 @@ export class MockChallengeRepository implements IChallengeRepository {
           wins: 0,
           losses: 0,
         },
+        myReport: null,
+        winnerId: null,
       };
     });
 

@@ -29,7 +29,7 @@ interface ChallengeProps {
 }
 
 export class Challenge {
-  private constructor(private props: ChallengeProps) {}
+  private constructor(private props: ChallengeProps) { }
 
   static create(props: ChallengeProps): Challenge {
     return new Challenge(props);
@@ -109,6 +109,16 @@ export class Challenge {
       return err(new DomainError("You are not a participant", "FORBIDDEN"));
     }
 
+    // Each participant may only declare once. Without this check, a user
+    // can refresh the client (which resets the optimistic `myReport` flag),
+    // hit /declare again, and silently overwrite their own prior answer.
+    if (isCreator && this.props.declaredWinnerId !== null) {
+      return err(new DomainError("You have already reported a result for this challenge", "ALREADY_DECLARED"));
+    }
+    if (isOpponent && this.props.opponentDeclaredWinnerId !== null) {
+      return err(new DomainError("You have already reported a result for this challenge", "ALREADY_DECLARED"));
+    }
+
     // Validate the declared winner is actually a participant
     const validWinners = [this.props.creatorId, this.props.opponentId];
     if (!validWinners.includes(winnerId)) {
@@ -133,7 +143,6 @@ export class Challenge {
       }
     }
 
-    // Only one person declared so far — move to WAITING for the other party.
     this.props.status = "WAITING";
     return ok("WAITING");
   }

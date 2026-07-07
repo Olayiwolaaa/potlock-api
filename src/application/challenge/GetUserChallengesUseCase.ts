@@ -31,6 +31,8 @@ export interface ChallengeListItem {
     wins: number;
     losses: number;
   };
+  myReport: "WON" | "LOST" | null;
+  winnerId: string | null;
 }
 
 interface GetUserChallengesOutput {
@@ -39,9 +41,6 @@ interface GetUserChallengesOutput {
 }
 
 export class GetUserChallengesUseCase {
-  // Takes the repository as a constructor dependency instead of
-  // importing `db` directly, matching how the other use cases in this
-  // app are wired (e.g. SettleChallengeUseCase takes IChallengeRepository).
   constructor(private readonly challengeRepo: ChallengeRepository) {}
 
   async execute(
