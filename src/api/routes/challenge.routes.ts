@@ -399,10 +399,13 @@ challengeRoutes.openapi(
         content: {
           "multipart/form-data": {
             schema: z.object({
-              media: z.union([
-                z.string().openapi({ type: "string", format: "binary" }),
-                z.array(z.string().openapi({ type: "string", format: "binary" })),
-              ]).openapi({ description: "One or more screenshot/video files" }),
+              media: z
+                .union([z.instanceof(File), z.array(z.instanceof(File))])
+                .openapi({
+                  type: "array",
+                  items: { type: "string", format: "binary" },
+                  description: "One or more screenshot/video files",
+                }),
               note: z.string().max(300).optional(),
             }),
           },
