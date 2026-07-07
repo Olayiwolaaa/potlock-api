@@ -128,4 +128,60 @@ export const cancelResponseSchema = successResponse(
   }),
 ).openapi("CancelResponse");
 
+export const disputeEvidenceItemSchema = z.object({
+  id: z.string().uuid(),
+  challengeId: z.string().uuid(),
+  submittedBy: z.string().uuid(),
+  submitterName: z.string(),
+  mediaType: z.enum(["IMAGE", "VIDEO"]),
+  mediaUrl: z.string(),
+  fileSizeBytes: z.number(),
+  note: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+export const submitDisputeEvidenceResponseSchema = successResponse(
+  z.object({
+    uploaded: z.array(
+      z.object({
+        id: z.string().uuid(),
+        mediaType: z.enum(["IMAGE", "VIDEO"]),
+        mediaUrl: z.string(),
+      }),
+    ),
+  }),
+).openapi("SubmitDisputeEvidenceResponse");
+
+export const listDisputeEvidenceResponseSchema = successResponse(
+  z.array(disputeEvidenceItemSchema),
+).openapi("ListDisputeEvidenceResponse");
+
+export const listDisputedChallengesResponseSchema = successResponse(
+  z.object({
+    challenges: z.array(
+      z.object({
+        id: z.string().uuid(),
+        title: z.string(),
+        stakeKobo: z.number(),
+        potKobo: z.number(),
+        creator: z.object({
+          id: z.string().uuid(),
+          name: z.string(),
+          claimedWinnerId: z.string().uuid().nullable(),
+        }),
+        opponent: z
+          .object({
+            id: z.string().uuid(),
+            name: z.string(),
+            claimedWinnerId: z.string().uuid().nullable(),
+          })
+          .nullable(),
+        evidenceCount: z.number(),
+        updatedAt: z.string(),
+      }),
+    ),
+    total: z.number(),
+  }),
+).openapi("ListDisputedChallengesResponse");
+
 export { errorResponse };
