@@ -1,10 +1,10 @@
-# PotLockNg API
+# PotLock API
 
-The backend API for **PotLockNg** — a wagering and escrow engine for the Nigerian content creator economy.
+The backend API for **PotLock** — a wagering and escrow engine for the Nigerian content creator economy.
 
-PotLockNg lets TikTok streamers, iMessage gamers, and tournament organizers create secure "Challenge Vaults" where participants lock in wagers and sponsors boost prize pools. Funds move into escrow, removing trust-based payment risk between players.
+PotLock lets TikTok streamers, iMessage gamers, and tournament organizers create secure "Challenge Vaults" where participants lock in wagers and sponsors boost prize pools. Funds move into escrow, removing trust-based payment risk between players.
 
-- **Frontend:** [potlockng](https://github.com/Olayiwolaaa/potlockng) (Next.js PWA) — generates its typed client from this API's OpenAPI schema
+- **Frontend:** [potlock](https://github.com/Olayiwolaaa/potlock) (Next.js PWA) — generates its typed client from this API's OpenAPI schema
 - **API docs:** Scalar UI at `/docs`, OpenAPI JSON at `/openapi.json`
 - **License:** [MIT](./LICENSE)
 
@@ -81,8 +81,8 @@ src/
 ### Setup
 
 ```bash
-git clone https://github.com/Olayiwolaaa/potlockng-api.git
-cd potlockng-api
+git clone https://github.com/Olayiwolaaa/potlock-api.git
+cd potlock-api
 bun install
 cp .env.example .env
 # Fill in ALL values — see the Environment Variables section below
