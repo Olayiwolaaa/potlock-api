@@ -1,8 +1,14 @@
 # PotLockNg API
 
-The backend API for PotLockNg — a wagering and escrow engine for the Nigerian content creator economy.
+The backend API for **PotLockNg** — a wagering and escrow engine for the Nigerian content creator economy.
 
 PotLockNg lets TikTok streamers, iMessage gamers, and tournament organizers create secure "Challenge Vaults" where participants lock in wagers and sponsors boost prize pools. Funds move into escrow, removing trust-based payment risk between players.
+
+- **Frontend:** [potlockng](https://github.com/Olayiwolaaa/potlockng) (Next.js PWA) — generates its typed client from this API's OpenAPI schema
+- **API docs:** Scalar UI at `/docs`, OpenAPI JSON at `/openapi.json`
+- **License:** [MIT](./LICENSE)
+
+---
 
 ## Tech Stack
 
@@ -20,7 +26,9 @@ PotLockNg lets TikTok streamers, iMessage gamers, and tournament organizers crea
 - **Logging:** Pino
 - **Validation:** Zod
 
-## Project Structure
+## Architecture
+
+A layered / clean architecture: HTTP concerns, application use cases, domain models, and infrastructure adapters are kept separate so business rules don't depend on frameworks. See [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for the request lifecycle, middleware order, and the OpenAPI→frontend-client contract.
 
 ```
 src/
@@ -45,7 +53,7 @@ src/
 │   ├── tournament/       # Tournament brackets
 │   ├── user/             # Profile management
 │   └── wallet/           # Funding, withdrawals, banks
-├── config/               # Environment validation
+├── config/               # Environment validation (Zod)
 ├── domain/               # Domain models, interfaces, value objects
 │   ├── challenge/
 │   ├── shared/           # Result type, Money, DomainError
@@ -55,6 +63,7 @@ src/
 │   ├── auth/             # TokenService, GoogleOAuthService
 │   ├── cache/            # Redis client
 │   ├── db/               # Drizzle schema, migrations, repositories, seed
+│   ├── email/            # Resend email service
 │   ├── logger/           # Pino logger
 │   ├── payment/          # Paystack integration
 │   ├── realtime/         # Pusher
@@ -76,13 +85,15 @@ git clone https://github.com/Olayiwolaaa/potlockng-api.git
 cd potlockng-api
 bun install
 cp .env.example .env
-# Fill in your actual values in .env
+# Fill in ALL values — see the Environment Variables section below
 docker compose up postgres redis -d
 bun run db:push
 bun run dev
 ```
 
 The API runs at `http://localhost:3000`.
+
+> The server validates its environment on boot (`src/config/env.ts`) and **exits immediately if any required variable is missing or malformed**. Make sure every variable below is set before starting.
 
 ### Docker (Full Stack)
 
@@ -94,39 +105,93 @@ docker compose down
 
 ## Environment Variables
 
-Copy `.env.example` and fill in values:
+Copy `.env.example` and fill in values. Every variable below is read by `src/config/env.ts`; those without a default are **required** and the process will not start without them.
 
-| Variable | Description |
-| --- | --- |
-| `APP_ENV` | `development`, `staging`, or `production` |
-| `PORT` | Server port (default: 3000) |
-| `POSTGRES_USER` | Postgres user (for local Docker DB) |
-| `POSTGRES_PASSWORD` | Postgres password (for local Docker DB) |
-| `POSTGRES_DB` | Postgres database name |
-| `DATABASE_URL` | PostgreSQL connection string |
-| `JWT_SECRET` | Secret for signing JWTs (min 32 chars) |
-| `PAYSTACK_SECRET_KEY` | Paystack secret key |
-| `PAYSTACK_PUBLIC_KEY` | Paystack public key |
-| `PAYSTACK_WEBHOOK_SECRET` | Paystack webhook secret |
-| `PUSHER_APP_ID` | Pusher app ID |
-| `PUSHER_KEY` | Pusher key |
-| `PUSHER_SECRET` | Pusher secret |
-| `PUSHER_CLUSTER` | Pusher cluster (default: mt1) |
-| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name |
-| `CLOUDINARY_API_KEY` | Cloudinary API key |
-| `CLOUDINARY_API_SECRET` | Cloudinary API secret |
-| `REDIS_URL` | Redis connection URL |
-| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
+### App
 
-> Note: The code depends on `resend` for transactional email. If email is enabled, add your `RESEND_API_KEY` (and any sender config) to `.env` — this key is not yet in `.env.example`.
+| Variable | Required | Description |
+|---|---|---|
+| `APP_ENV` | default `development` | `development`, `staging`, or `production` |
+| `APP_URL` | default `http://localhost:3000` | Base URL, used as the OpenAPI server URL |
+| `PORT` | default `3000` | Server port |
+
+### CORS
+
+| Variable | Default | Description |
+|---|---|---|
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:3001,https://potlock.vercel.app` | Comma-separated allowed origins |
+| `CORS_ALLOWED_METHODS` | `GET, POST, PUT, DELETE, OPTIONS` | Allowed methods |
+| `CORS_ALLOWED_HEADERS` | `Content-Type,Authorization` | Allowed headers |
+| `CORS_ALLOW_CREDENTIALS` | `false` | `"true"` or `"false"` |
+| `CORS_MAX_AGE` | `86400` | Preflight cache seconds |
+
+### Database
+
+| Variable | Required | Description |
+|---|---|---|
+| `POSTGRES_USER` | — | Postgres user (local Docker DB) |
+| `POSTGRES_PASSWORD` | — | Postgres password (local Docker DB) |
+| `POSTGRES_DB` | — | Postgres database name |
+| `DATABASE_URL` | **yes** | PostgreSQL connection string (valid URL) |
+
+### Auth
+
+| Variable | Required | Description |
+|---|---|---|
+| `JWT_SECRET` | **yes** | Secret for signing JWTs (**min 32 chars**) |
+| `GOOGLE_CLIENT_ID` | **yes** | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | **yes** | Google OAuth client secret |
+
+### Paystack
+
+| Variable | Required | Description |
+|---|---|---|
+| `PAYSTACK_BASE_URL` | default `https://api.paystack.co` | Paystack API base URL |
+| `PAYSTACK_SECRET_KEY` | **yes** | Secret key (must start with `sk_`) |
+| `PAYSTACK_PUBLIC_KEY` | — | Public key |
+| `PAYSTACK_WEBHOOK_SECRET` | **yes** | Webhook signing secret |
+
+### Pusher
+
+| Variable | Required | Description |
+|---|---|---|
+| `PUSHER_APP_ID` | **yes** | Pusher app ID |
+| `PUSHER_KEY` | **yes** | Pusher key |
+| `PUSHER_SECRET` | **yes** | Pusher secret |
+| `PUSHER_CLUSTER` | default `mt1` | Pusher cluster |
+
+### Cloudinary
+
+| Variable | Required | Description |
+|---|---|---|
+| `CLOUDINARY_CLOUD_NAME` | **yes** | Cloudinary cloud name |
+| `CLOUDINARY_API_KEY` | **yes** | Cloudinary API key |
+| `CLOUDINARY_API_SECRET` | **yes** | Cloudinary API secret |
+
+### Redis
+
+| Variable | Required | Description |
+|---|---|---|
+| `REDIS_URL` | **yes** | Redis connection URL |
+
+### Email (Resend)
+
+| Variable | Required | Description |
+|---|---|---|
+| `RESEND_API_KEY` | **yes** | Resend API key (must start with `re_`) |
+| `EMAIL_FROM` | **yes** | Sender address (valid email) |
+| `FEEDBACK_TO_EMAIL` | **yes** | Where feedback submissions are emailed |
+
+> The three email variables have **no defaults** and are strictly validated. A `.env` without them will fail to boot with `Invalid environment variables`.
 
 ## API Endpoints
+
+Interactive docs (Scalar) are served at `/docs`, backed by `/openapi.json`.
 
 ### Auth
 
 | Method | Path | Description |
-| --- | --- | --- |
+|---|---|---|
 | `POST` | `/api/v1/auth/register` | Create account (email + password) |
 | `POST` | `/api/v1/auth/login` | Login with email + password |
 | `POST` | `/api/v1/auth/google` | Sign in with Google (ID token) |
@@ -134,14 +199,14 @@ Copy `.env.example` and fill in values:
 ### Users
 
 | Method | Path | Description |
-| --- | --- | --- |
+|---|---|---|
 | `GET` | `/api/v1/users/me` | Get current user profile |
 | `PATCH` | `/api/v1/users/me` | Update profile (name, avatar) |
 
 ### Wallet
 
 | Method | Path | Description |
-| --- | --- | --- |
+|---|---|---|
 | `GET` | `/api/v1/wallet/balance` | Get wallet balance |
 | `GET` | `/api/v1/wallet/transactions` | Transaction history |
 | `GET` | `/api/v1/wallet/banks` | List supported banks (Paystack) |
@@ -151,7 +216,7 @@ Copy `.env.example` and fill in values:
 ### Challenges
 
 | Method | Path | Description |
-| --- | --- | --- |
+|---|---|---|
 | `POST` | `/api/v1/challenges` | Create a challenge |
 | `GET` | `/api/v1/challenges/c/:slug` | Get challenge by link |
 | `POST` | `/api/v1/challenges/c/:slug/join` | Join a challenge |
@@ -162,7 +227,7 @@ Copy `.env.example` and fill in values:
 ### Bets
 
 | Method | Path | Description |
-| --- | --- | --- |
+|---|---|---|
 | `POST` | `/api/v1/bets` | Create a bet |
 | `GET` | `/api/v1/bets/:betId` | Get bet details |
 | `POST` | `/api/v1/bets/:betId/enter` | Enter a bet |
@@ -171,7 +236,7 @@ Copy `.env.example` and fill in values:
 ### Tournaments
 
 | Method | Path | Description |
-| --- | --- | --- |
+|---|---|---|
 | `POST` | `/api/v1/tournaments` | Create tournament |
 | `GET` | `/api/v1/tournaments/:id` | Get bracket + matches |
 | `POST` | `/api/v1/tournaments/:id/matches/:matchId/result` | Submit match result |
@@ -180,31 +245,36 @@ Copy `.env.example` and fill in values:
 ### KYC
 
 | Method | Path | Description |
-| --- | --- | --- |
+|---|---|---|
 | `GET` | `/api/v1/kyc/status` | Get KYC tier + limits |
 | `POST` | `/api/v1/kyc/bvn` | Submit BVN verification (async) |
 
 ### Notifications
 
+All require authentication.
+
 | Method | Path | Description |
-| --- | --- | --- |
-| `GET` | `/api/v1/notifications` | List notifications *(inferred — verify)* |
-| `PATCH` | `/api/v1/notifications/:id/read` | Mark notification read *(inferred — verify)* |
+|---|---|---|
+| `GET` | `/api/v1/notifications` | List notifications (`limit`, `offset`, `unreadOnly`); returns items + `unreadCount` + `total` |
+| `POST` | `/api/v1/notifications/:id/read` | Mark a single notification read |
+| `POST` | `/api/v1/notifications/read-all` | Mark all notifications read |
 
 ### Feedback
 
-| Method | Path | Description |
-| --- | --- | --- |
-| `POST` | `/api/v1/feedback` | Submit user feedback *(inferred — verify)* |
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/v1/feedback` | any authed user | Submit feedback (`message`, `rating` 1–5); emails `FEEDBACK_TO_EMAIL` |
+| `GET` | `/api/v1/feedback` | **admin only** | List submitted feedback (optional `rating` filter) |
 
 ### Other
 
 | Method | Path | Description |
-| --- | --- | --- |
+|---|---|---|
 | `POST` | `/webhooks/paystack` | Paystack webhook handler |
-| `POST` | `/pusher/auth` | Pusher channel auth *(inferred — verify)* |
+| `POST` | `/pusher/auth` | Pusher channel auth (JWT; own `private-user.*` and `presence-*` channels) |
 | `GET` | `/health` | Health check |
-| `GET` | `/docs` | Scalar API docs (non-production) |
+| `GET` | `/docs` | Scalar API docs |
+| `GET` | `/openapi.json` | OpenAPI 3.0 document |
 
 ## Scripts
 
@@ -226,6 +296,10 @@ bun run db:seed      # Seed the database
 - **Sponsored Events:** 5% fee on sponsorship injections
 - **Withdrawals:** Flat ₦50 processing fee per payout
 
+## Contributing
+
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for setup, the branch/PR workflow, commit conventions, and architectural guidelines.
+
 ## License
 
-Private — all rights reserved.
+[MIT](./LICENSE) © 2026 Karaole Olayiwola Muizz
