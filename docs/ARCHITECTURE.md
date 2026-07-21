@@ -1,6 +1,6 @@
 # Architecture
 
-PotLockNg API is a **Bun + Hono** service organized in a **clean/layered architecture**: HTTP concerns, application use cases, domain models, and infrastructure adapters are separated so business rules don't depend on frameworks or external services.
+PotLock API is a **Bun + Hono** service organized in a **clean/layered architecture**: HTTP concerns, application use cases, domain models, and infrastructure adapters are separated so business rules don't depend on frameworks or external services.
 
 ## Layers
 
@@ -56,7 +56,7 @@ Responses use a discriminated union: `{ success: true, data }` or `{ success: fa
 
 ## OpenAPI & the generated frontend client
 
-The app is built on `@hono/zod-openapi`: every route declares its Zod request/response schemas via `createRoute`, and Hono derives the OpenAPI document at `/openapi.json`. The **frontend (`potlockng`) generates its typed client from this exact document** — so route/schema changes here propagate to the frontend via its `bun run generate-client`. Keep schemas accurate; they are the contract.
+The app is built on `@hono/zod-openapi`: every route declares its Zod request/response schemas via `createRoute`, and Hono derives the OpenAPI document at `/openapi.json`. The **frontend (`potlock`) generates its typed client from this exact document** — so route/schema changes here propagate to the frontend via its `bun run generate-client`. Keep schemas accurate; they are the contract.
 
 A `bearerAuth` security scheme (HTTP bearer, JWT) is registered globally. Protected routes declare `security: [{ bearerAuth: [] }]` and sit behind the `requireAuth` middleware; admin-only actions (e.g. `GET /api/v1/feedback`) additionally call `requireAdmin`.
 

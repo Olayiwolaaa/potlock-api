@@ -1,12 +1,12 @@
-# Contributing to PotLockNg API
+# Contributing to PotLock API
 
 ## Local setup
 
 Prerequisites: [Bun](https://bun.sh) v1+, Docker & Docker Compose.
 
 ```bash
-git clone https://github.com/Olayiwolaaa/potlockng-api.git
-cd potlockng-api
+git clone https://github.com/Olayiwolaaa/potlock-api.git
+cd potlock-api
 bun install
 cp .env.example .env          # then fill in ALL values — see docs/ENV.md
 docker compose up postgres redis -d
@@ -58,7 +58,7 @@ Conventional Commits with scopes, matching the existing history:
 
 ## When you change the API contract
 
-Changing a route path, method, or schema affects the frontend, which generates its client from `/openapi.json`. After merging, regenerate the frontend client (`bun run generate-client` in `potlockng`) and commit the result there.
+Changing a route path, method, or schema affects the frontend, which generates its client from `/openapi.json`. After merging, regenerate the frontend client (`bun run generate-client` in `potlock`) and commit the result there.
 
 ## Known TODOs worth addressing
 
