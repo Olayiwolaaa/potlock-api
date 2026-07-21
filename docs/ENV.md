@@ -20,7 +20,7 @@ CORS_MAX_AGE=86400
 # ── Database ─────────────────────────────────────────────────
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=root
-POSTGRES_DB=potlockng
+POSTGRES_DB=potlock
 DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}?schema=public
 
 # ── Auth ─────────────────────────────────────────────────────
