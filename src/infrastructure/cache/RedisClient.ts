@@ -10,24 +10,38 @@ class RedisAdapter {
     this.client = new Redis(env.REDIS_URL, {
       maxRetriesPerRequest: 3,
       lazyConnect: true,
+      connectTimeout: 10_000, // fail fast instead of hanging forever
       // Never crash the app if Redis is unavailable
       // Cache misses are fine — the DB is the source of truth
       reconnectOnError: () => true,
     });
 
     this.client.on("connect", () => {
+      logger.info("Redis TCP connected, awaiting handshake...");
+    });
+
+    this.client.on("ready", () => {
       this.isConnected = true;
-      logger.info("Redis connected");
+      logger.info("Redis ready");
     });
 
     this.client.on("error", (err) => {
       this.isConnected = false;
       logger.error({ err }, "Redis error — cache disabled");
     });
+
+    this.client.on("close", () => {
+      this.isConnected = false;
+    });
   }
 
-  async connect() {
-    await this.client.connect();
+  async connect(): Promise<void> {
+    try {
+      await this.client.connect();
+    } catch (err) {
+      logger.error({ err }, "Redis connect() threw — running without cache");
+      // Don't rethrow: caller already treats this as a fire-and-forget
+    }
   }
 
   // ── Core operations ───────────────────────────────────────────────────────

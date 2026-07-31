@@ -12,12 +12,13 @@ setInterval(async () => {
   await expireChallenges.execute();
 }, 5 * 60 * 1000);
 
-await redis.connect();
-logger.info("Cache connected");
-
 Bun.serve({
   port: env.PORT,
   fetch: app.fetch,
 });
 
 logger.info(`PotLockNg API running on port ${env.PORT} [${env.APP_ENV}]`);
+
+redis.connect().catch((err) => {
+  logger.error({ err }, "Redis initial connect failed — continuing without cache");
+});
